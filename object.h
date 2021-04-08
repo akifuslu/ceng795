@@ -7,6 +7,17 @@
 
 namespace raytracer
 {
+
+    class RayHit
+    {
+        public:
+            Object* Object;
+            Material Material;
+            float T;
+            Vector3f Point;
+            Vector3f Normal;
+    };
+
     class Face
     {
         public:
@@ -70,4 +81,5 @@ namespace raytracer
         private:
             Vector3f _center;            
     };
+
 }
