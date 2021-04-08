@@ -1,2 +1,2 @@
 all:
-	g++ *.cpp -o raytracer -std=c++11 -O3 -flto
+	clang++ -Wall *.cpp -o raytracer -std=c++11 -O3 -flto

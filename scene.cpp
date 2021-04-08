@@ -111,7 +111,7 @@ namespace raytracer
                         Ray sRay = Ray(sp, wi);
                         RayHit sHit;
                         bool sf = RayCast(sRay, sHit, r, false);
-                        if(sf)
+                        if(sf && sHit.T < r)
                             continue;
                         // DIFFUSE
                         float teta = Vector3f::Dot(wi, hit.Normal);

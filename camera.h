@@ -21,7 +21,7 @@ namespace raytracer
             friend std::ostream& operator<<(std::ostream& os, const Camera& cam);
         private:
             Vector3f img_center;
-            Vector3f v;
+            Vector3f u, v, w;
             Vector3f q;
     };
 }

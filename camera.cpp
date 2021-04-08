@@ -1,4 +1,6 @@
 #include "camera.h"
+#include <cmath>
+#include <iostream>
 
 namespace raytracer
 {
@@ -14,16 +16,19 @@ namespace raytracer
 
         Gaze.Normalize();
         Up.Normalize();
+        w = Gaze * -1;
+        u = Vector3f::Cross(Up, w).Normalized();
+        v = Vector3f::Cross(w, u).Normalized();
+
         img_center = Position + Gaze * NearDistance;
-        v = Vector3f::Cross(Gaze, Up);
-        q = img_center + Up * NearPlane.W + v * NearPlane.X;
+        q = img_center + v * NearPlane.W + u * NearPlane.X;
     }
 
     Ray Camera::GetRay(int x, int y)
     {
-        float sv = (x + .5) * ((NearPlane.Y - NearPlane.X) / ImageResolution.X);
-        float su = (y + .5) * ((NearPlane.W - NearPlane.Z) / ImageResolution.Y);
-        Vector3f s = q + (v * sv) - (Up * su);
+        float su = (x + .5) * ((NearPlane.Y - NearPlane.X) / ImageResolution.X);
+        float sv = (y + .5) * ((NearPlane.W - NearPlane.Z) / ImageResolution.Y);
+        Vector3f s = q + (u * su) - (v * sv);
         return Ray(Position, (s - Position).Normalized());
     }
 

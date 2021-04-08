@@ -7,7 +7,8 @@
 
 namespace raytracer
 {
-
+    class Object;
+    
     class RayHit
     {
         public:
