@@ -8,7 +8,7 @@
 namespace raytracer
 {
     class Object;
-    
+
     class RayHit
     {
         public:
@@ -18,19 +18,41 @@ namespace raytracer
             Vector3f Point;
             Vector3f Normal;
     };
+    
+    class IHittable
+    {
+        public:
+            virtual bool Hit(const Ray& ray, RayHit& hit) {}
+            virtual void Bounds(Vector3f& min, Vector3f& max) {}
+            Vector3f* Center;
+    };
 
-    class Face
+    class AABB : public IHittable
+    {
+        public:
+            IHittable* Left;
+            IHittable* Right;
+            virtual bool Hit(const Ray& ray, RayHit& hit) override;
+            virtual void Bounds(Vector3f& min, Vector3f& max) override;
+            Vector3f* Min;
+            Vector3f* Max;
+    };
+
+    class Face : public IHittable
     {
         public:
             Face();
-            Face(Vector3f* v0, Vector3f* v1, Vector3f* v2);
+            Face(Vector3f* v0, Vector3f* v1, Vector3f* v2, Material* material);
             Vector3f* V0;
             Vector3f* V1;
             Vector3f* V2;
             Vector3f Normal;
             Vector3f V0V1;
             Vector3f V0V2;
-            bool Hit(const Ray& ray, RayHit& hit);
+            virtual bool Hit(const Ray& ray, RayHit& hit) override;
+            virtual void Bounds(Vector3f& min, Vector3f& max) override;
+        private:
+            Material* _material;
     };
 
     class Object
@@ -40,8 +62,8 @@ namespace raytracer
             int MaterialId;
             friend std::ostream& operator<<(std::ostream& os, const Object& mesh);
             virtual std::ostream& Print(std::ostream& os) const;
-            virtual bool Hit(const Ray& ray, RayHit& hit);
             virtual void Load(std::vector<Vector3f>& vertexData, std::vector<Material>& materials);
+            virtual std::vector<IHittable*> GetHittables() {}
         protected:
             Material _material;
     };
@@ -52,8 +74,8 @@ namespace raytracer
             Mesh(pugi::xml_node node);
             std::vector<Vector3i> Faces;
             virtual std::ostream& Print(std::ostream& os) const override;
-            virtual bool Hit(const Ray& ray, RayHit& hit) override;
             virtual void Load(std::vector<Vector3f>& vertexData, std::vector<Material>& materials) override;
+            virtual std::vector<IHittable*> GetHittables() override;
         private:
             std::vector<Face> _faces;
     };
@@ -63,22 +85,24 @@ namespace raytracer
         public:
             Triangle(pugi::xml_node node);
             Vector3i Indices;
-            virtual std::ostream& Print(std::ostream& os) const override;
-            virtual bool Hit(const Ray& ray, RayHit& hit) override;
+            virtual std::ostream& Print(std::ostream& os) const override;            
             virtual void Load(std::vector<Vector3f>& vertexData, std::vector<Material>& materials) override;
+            virtual std::vector<IHittable*> GetHittables() override;
         private:
             Face _face;            
     };
 
-    class Sphere : public Object
+    class Sphere : public Object, public IHittable
     {
         public:
             Sphere(pugi::xml_node node);
-            int Center;
+            int CenterId;
             float Radius;
             virtual std::ostream& Print(std::ostream& os) const override;
             virtual bool Hit(const Ray& ray, RayHit& hit) override;
             virtual void Load(std::vector<Vector3f>& vertexData, std::vector<Material>& materials) override;
+            virtual std::vector<IHittable*> GetHittables() override;
+            virtual void Bounds(Vector3f& min, Vector3f& max) override;
         private:
             Vector3f _center;            
     };

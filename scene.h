@@ -24,6 +24,8 @@ namespace raytracer
             std::vector<Material> Materials;
             std::vector<Vector3f> VertexData;
             std::vector<Object*> Objects;
+            std::vector<IHittable*> Hittables;
+            IHittable* Root;
             friend std::ostream& operator<<(std::ostream& os, const Scene& scene);
         private:
             bool RayCast(const Ray& ray, RayHit& hit, float maxDist, bool closest);

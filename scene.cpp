@@ -57,36 +57,134 @@ namespace raytracer
         }
     }
 
+
+    void ComputeBounds(std::vector<IHittable*> hittables, Vector3f* min, Vector3f* max)
+    {        
+        for(int i = 0; i < hittables.size(); i++)
+        {
+            Vector3f mn, mx;
+            hittables[i]->Bounds(mn, mx);
+            if(mn.X < min->X)
+                min->X = mn.X;
+            if(mn.Y < min->Y)
+                min->Y = mn.Y;
+            if(mn.Z < min->Z)
+                min->Z = mn.Z;
+            if(mx.X > max->X)
+                max->X = mx.X;
+            if(mx.Y > max->Y)
+                max->Y = mx.Y;
+            if(mx.Z > max->Z)
+                max->Z = mx.Z;
+        }
+    }
+
+    IHittable* BuildBVH(std::vector<IHittable*> hittables, int axis) // 0-x, 1-y, 2-z
+    {
+        if(hittables.size() == 0)
+        {
+            return NULL;
+        }
+        if(hittables.size() == 1)
+        {
+            return hittables[0];
+        }
+        AABB* aabb = new AABB();
+        aabb->Min = new Vector3f(FLT_MAX, FLT_MAX, FLT_MAX);
+        aabb->Max = new Vector3f(FLT_MIN, FLT_MIN, FLT_MIN);
+        ComputeBounds(hittables, aabb->Min, aabb->Max);
+        auto t = (*aabb->Min + *aabb->Max) / 2;
+        aabb->Center = new Vector3f(t.X, t.Y, t.Z);
+        if(hittables.size() == 2)
+        {
+            aabb->Left = hittables[0];
+            aabb->Right = hittables[1];
+            return aabb;
+        }
+        //float xlen = aabb->Max->X - aabb->Min->X; 
+        //float ylen = aabb->Max->Y - aabb->Min->Y;        
+        //float zlen = aabb->Max->Z - aabb->Min->Z;
+        //if(xlen > ylen && xlen > zlen)
+        //    axis = 0;
+        //if(ylen > xlen && ylen > zlen)
+        //    axis = 1;
+        //if(zlen > ylen && zlen > xlen)
+        //    axis = 2;
+
+        std::vector<IHittable*> lhs;
+        std::vector<IHittable*> rhs;
+        float c = 0;        
+        switch(axis)
+        {
+            case 0:
+                c = aabb->Center->X;
+                //std::sort(hittables.begin(), hittables.end(), 
+                //        [](const IHittable* & a, const IHittable* & b) -> bool
+                //        { 
+                //            return a->Center->X < b->Center->X; 
+                //        });
+                for(int i = 0; i < hittables.size(); i++)
+                {
+                    if(hittables[i]->Center->X < c)
+                        lhs.push_back(hittables[i]);
+                    else
+                        rhs.push_back(hittables[i]);
+                }
+                axis = 1;
+                break;
+            case 1:
+                c = aabb->Center->Y;
+                for(int i = 0; i < hittables.size(); i++)
+                {
+                    if(hittables[i]->Center->Y < c)
+                        lhs.push_back(hittables[i]);
+                    else
+                        rhs.push_back(hittables[i]);
+                }
+                axis = 2;
+                break;
+            case 2:
+                c = aabb->Center->Z;
+                for(int i = 0; i < hittables.size(); i++)
+                {
+                    if(hittables[i]->Center->Z < c)
+                        lhs.push_back(hittables[i]);
+                    else
+                        rhs.push_back(hittables[i]);
+                }
+                axis = 0;
+                break;
+        }
+        if(lhs.size() == 0)
+        {            
+            lhs.push_back(rhs[rhs.size() - 1]);
+            rhs.erase(rhs.begin() + rhs.size() - 1);
+        }
+        if(rhs.size() == 0)
+        {            
+            rhs.push_back(lhs[lhs.size() - 1]);
+            lhs.erase(lhs.begin() + lhs.size() - 1);
+        }
+
+        aabb->Left = BuildBVH(lhs, axis);
+        aabb->Right = BuildBVH(rhs, axis);    
+    }
+
     void Scene::Load()
     {
         for (size_t i = 0; i < Objects.size(); i++)
         {
             Objects[i]->Load(VertexData, Materials);
+            auto hs = Objects[i]->GetHittables();
+            Hittables.insert(Hittables.end(), hs.begin(), hs.end());
         }
-        
+        Root = BuildBVH(Hittables, 0);
     }
 
     bool Scene::RayCast(const Ray& ray, RayHit& hit, float maxDist, bool closest)
     {
         hit.T = maxDist;
-        bool flag = false;
-        for(int k = 0; k < Objects.size(); k++)
-        {
-            RayHit tHit;
-            if(Objects[k]->Hit(ray, tHit))
-            {
-                flag = true;                            
-                if(tHit.T < hit.T)
-                {
-                    hit = tHit;
-                    if(!closest)
-                    {
-                        return true;
-                    }
-                }
-            }
-        }
-        return flag;
+        return Root->Hit(ray, hit);
     }
 
     void Scene::Trace(int yStart, int yEnd, std::vector<unsigned char>& pixels, Camera& cam)
