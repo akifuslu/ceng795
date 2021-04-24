@@ -13,6 +13,8 @@ namespace raytracer
             Ray GetRay(int x, int y);
             Vector3f Position;
             Vector3f Gaze;
+            Vector3f GazePoint;
+            float FovY;
             Vector3f Up;
             Vector4f NearPlane;
             float NearDistance;

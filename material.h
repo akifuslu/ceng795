@@ -13,6 +13,11 @@ namespace raytracer
             Vector3f DiffuseReflectance;
             Vector3f SpecularReflectance;
             float PhongExponent;
+            Vector3f MirrorReflectance;
+            float RefractionIndex;
+            float AbsorptionIndex;
+            Vector3f AbsorptionCoefficient;
+            int Type;
             friend std::ostream& operator<<(std::ostream& os, const Material& mat);
     };
 }

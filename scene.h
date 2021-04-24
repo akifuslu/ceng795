@@ -29,6 +29,6 @@ namespace raytracer
             friend std::ostream& operator<<(std::ostream& os, const Scene& scene);
         private:
             bool RayCast(const Ray& ray, RayHit& hit, float maxDist, bool closest);
-            void Trace(int yStart, int yEnd, std::vector<unsigned char>& block, Camera& cam);
+            Vector3f Trace(Ray ray, Camera& cam, int depth);
     };
 }

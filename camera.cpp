@@ -13,13 +13,29 @@ namespace raytracer
         NearDistance = node.child("NearDistance").text().as_float();
         ImageResolution = Vector2i(node.child("ImageResolution"));
         ImageName = node.child("ImageName").text().as_string();
+        GazePoint = Vector3f(node.child("GazePoint"));
+        FovY = node.child("FovY").text().as_float();
+        if(std::strcmp(node.attribute("type").as_string(), "lookAt") == 0)
+        {
+            Gaze = (GazePoint - Position).Normalized();
+            double pi = 3.14159265359;
+            float rad = ((FovY/2) * (pi / 180));            
+            auto tmp = std::tan(rad) * NearDistance;
+            NearPlane.W = tmp;
+            NearPlane.Z = -tmp;
+            float aspect = (float)ImageResolution.X / (float)ImageResolution.Y;
+            NearPlane.Y = NearPlane.W * aspect;
+            NearPlane.X = -NearPlane.Y;
+            std::cout << NearPlane.W << std::endl;
+            std::cout << NearPlane.Y << std::endl;
+        }
 
         Gaze.Normalize();
         Up.Normalize();
-        w = Gaze * -1;
-        u = Vector3f::Cross(Up, w).Normalized();
-        v = Vector3f::Cross(w, u).Normalized();
-
+        //w = Gaze * -1;
+        u = Vector3f::Cross(Gaze, Up).Normalized();
+        v = Vector3f::Cross(u, Gaze).Normalized();
+        std::cout << Vector3f::Dot(u, v) << std::endl;
         img_center = Position + Gaze * NearDistance;
         q = img_center + v * NearPlane.W + u * NearPlane.X;
     }

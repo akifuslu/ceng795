@@ -22,20 +22,32 @@ namespace raytracer
     class IHittable
     {
         public:
-            virtual bool Hit(const Ray& ray, RayHit& hit) {}
-            virtual void Bounds(Vector3f& min, Vector3f& max) {}
-            Vector3f* Center;
+            virtual bool Hit(const Ray& ray, RayHit& hit) {return false;}
+            Vector3f Center;
+            Vector3f Bounds[2];
+            virtual void Print()
+            {
+                std::cout << Bounds[0] << std::endl;
+                std::cout << Bounds[1] << std::endl;
+            }
     };
 
     class AABB : public IHittable
     {
         public:
+            AABB(){}
+            AABB(IHittable** hs, int count);
+            AABB(IHittable* right, IHittable* left);
             IHittable* Left;
             IHittable* Right;
             virtual bool Hit(const Ray& ray, RayHit& hit) override;
-            virtual void Bounds(Vector3f& min, Vector3f& max) override;
-            Vector3f* Min;
-            Vector3f* Max;
+            virtual void Print() override
+            {
+                std::cout << Bounds[0] << std::endl;
+                std::cout << Bounds[1] << std::endl;
+                Left->Print();
+                Right->Print();
+            }
     };
 
     class Face : public IHittable
@@ -50,8 +62,7 @@ namespace raytracer
             Vector3f V0V1;
             Vector3f V0V2;
             virtual bool Hit(const Ray& ray, RayHit& hit) override;
-            virtual void Bounds(Vector3f& min, Vector3f& max) override;
-        private:
+//        private:
             Material* _material;
     };
 
@@ -63,7 +74,10 @@ namespace raytracer
             friend std::ostream& operator<<(std::ostream& os, const Object& mesh);
             virtual std::ostream& Print(std::ostream& os) const;
             virtual void Load(std::vector<Vector3f>& vertexData, std::vector<Material>& materials);
-            virtual std::vector<IHittable*> GetHittables() {}
+            virtual std::vector<IHittable*> GetHittables() 
+            {
+                return std::vector<IHittable*>();
+            }
         protected:
             Material _material;
     };
@@ -78,6 +92,7 @@ namespace raytracer
             virtual std::vector<IHittable*> GetHittables() override;
         private:
             std::vector<Face> _faces;
+            bool _ply = false;
     };
 
     class Triangle : public Object
@@ -102,7 +117,6 @@ namespace raytracer
             virtual bool Hit(const Ray& ray, RayHit& hit) override;
             virtual void Load(std::vector<Vector3f>& vertexData, std::vector<Material>& materials) override;
             virtual std::vector<IHittable*> GetHittables() override;
-            virtual void Bounds(Vector3f& min, Vector3f& max) override;
         private:
             Vector3f _center;            
     };

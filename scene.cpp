@@ -7,6 +7,7 @@
 #include <cmath>
 #include <thread>
 #include <chrono>
+#include <future>
 
 namespace raytracer
 {
@@ -14,6 +15,8 @@ namespace raytracer
     {
         BackgroundColor =  Vector3f(node.child("BackgroundColor"));
         ShadowRayEpsilon = node.child("ShadowRayEpsilon").text().as_float();
+        if(ShadowRayEpsilon == 0)
+            ShadowRayEpsilon = .000001f;
         IntersectionTestEpsilon = node.child("IntersectionTestEpsilon").text().as_float();
         auto cameras = node.child("Cameras");
         for(auto& camera: cameras.children())
@@ -57,119 +60,6 @@ namespace raytracer
         }
     }
 
-
-    void ComputeBounds(std::vector<IHittable*> hittables, Vector3f* min, Vector3f* max)
-    {        
-        for(int i = 0; i < hittables.size(); i++)
-        {
-            Vector3f mn, mx;
-            hittables[i]->Bounds(mn, mx);
-            if(mn.X < min->X)
-                min->X = mn.X;
-            if(mn.Y < min->Y)
-                min->Y = mn.Y;
-            if(mn.Z < min->Z)
-                min->Z = mn.Z;
-            if(mx.X > max->X)
-                max->X = mx.X;
-            if(mx.Y > max->Y)
-                max->Y = mx.Y;
-            if(mx.Z > max->Z)
-                max->Z = mx.Z;
-        }
-    }
-
-    IHittable* BuildBVH(std::vector<IHittable*> hittables, int axis) // 0-x, 1-y, 2-z
-    {
-        if(hittables.size() == 0)
-        {
-            return NULL;
-        }
-        if(hittables.size() == 1)
-        {
-            return hittables[0];
-        }
-        AABB* aabb = new AABB();
-        aabb->Min = new Vector3f(FLT_MAX, FLT_MAX, FLT_MAX);
-        aabb->Max = new Vector3f(FLT_MIN, FLT_MIN, FLT_MIN);
-        ComputeBounds(hittables, aabb->Min, aabb->Max);
-        auto t = (*aabb->Min + *aabb->Max) / 2;
-        aabb->Center = new Vector3f(t.X, t.Y, t.Z);
-        if(hittables.size() == 2)
-        {
-            aabb->Left = hittables[0];
-            aabb->Right = hittables[1];
-            return aabb;
-        }
-        //float xlen = aabb->Max->X - aabb->Min->X; 
-        //float ylen = aabb->Max->Y - aabb->Min->Y;        
-        //float zlen = aabb->Max->Z - aabb->Min->Z;
-        //if(xlen > ylen && xlen > zlen)
-        //    axis = 0;
-        //if(ylen > xlen && ylen > zlen)
-        //    axis = 1;
-        //if(zlen > ylen && zlen > xlen)
-        //    axis = 2;
-
-        std::vector<IHittable*> lhs;
-        std::vector<IHittable*> rhs;
-        float c = 0;        
-        switch(axis)
-        {
-            case 0:
-                c = aabb->Center->X;
-                //std::sort(hittables.begin(), hittables.end(), 
-                //        [](const IHittable* & a, const IHittable* & b) -> bool
-                //        { 
-                //            return a->Center->X < b->Center->X; 
-                //        });
-                for(int i = 0; i < hittables.size(); i++)
-                {
-                    if(hittables[i]->Center->X < c)
-                        lhs.push_back(hittables[i]);
-                    else
-                        rhs.push_back(hittables[i]);
-                }
-                axis = 1;
-                break;
-            case 1:
-                c = aabb->Center->Y;
-                for(int i = 0; i < hittables.size(); i++)
-                {
-                    if(hittables[i]->Center->Y < c)
-                        lhs.push_back(hittables[i]);
-                    else
-                        rhs.push_back(hittables[i]);
-                }
-                axis = 2;
-                break;
-            case 2:
-                c = aabb->Center->Z;
-                for(int i = 0; i < hittables.size(); i++)
-                {
-                    if(hittables[i]->Center->Z < c)
-                        lhs.push_back(hittables[i]);
-                    else
-                        rhs.push_back(hittables[i]);
-                }
-                axis = 0;
-                break;
-        }
-        if(lhs.size() == 0)
-        {            
-            lhs.push_back(rhs[rhs.size() - 1]);
-            rhs.erase(rhs.begin() + rhs.size() - 1);
-        }
-        if(rhs.size() == 0)
-        {            
-            rhs.push_back(lhs[lhs.size() - 1]);
-            lhs.erase(lhs.begin() + lhs.size() - 1);
-        }
-
-        aabb->Left = BuildBVH(lhs, axis);
-        aabb->Right = BuildBVH(rhs, axis);    
-    }
-
     void Scene::Load()
     {
         for (size_t i = 0; i < Objects.size(); i++)
@@ -178,65 +68,128 @@ namespace raytracer
             auto hs = Objects[i]->GetHittables();
             Hittables.insert(Hittables.end(), hs.begin(), hs.end());
         }
-        Root = BuildBVH(Hittables, 0);
+        IHittable** hs = new IHittable*[Hittables.size()];
+        for(int i = 0; i < Hittables.size(); i++)
+            hs[i] = Hittables[i];
+        Root = new AABB(hs, Hittables.size());
     }
 
     bool Scene::RayCast(const Ray& ray, RayHit& hit, float maxDist, bool closest)
     {
-        hit.T = maxDist;
         return Root->Hit(ray, hit);
     }
 
-    void Scene::Trace(int yStart, int yEnd, std::vector<unsigned char>& pixels, Camera& cam)
+    Vector3f Scene::Trace(Ray ray, Camera& cam, int depth)
     {
-        int p = yStart * cam.ImageResolution.X * 4;
-        for (int i = yStart; i < yEnd; i++)
+        Vector3f color(0, 0, 0);
+        RayHit hit;              
+        if(depth == 0)
+            return color;      
+        if(RayCast(ray, hit, FLT_MAX, true))
         {
-            for (int j = 0; j < cam.ImageResolution.X; j++)
+            if(hit.Material.Type == 3)
             {
-                Ray ray = cam.GetRay(j, i);
-                RayHit hit;                    
-                if(RayCast(ray, hit, FLT_MAX, true))
+                auto vo = ray.Direction;
+                vo.Normalize();
+                auto reflect = vo - hit.Normal * 2 * Vector3f::Dot(hit.Normal, vo);
+                reflect.Normalize();
+                ray = Ray(hit.Point, reflect);
+                auto cl = Trace(ray, cam, depth - 1);
+                color = color + hit.Material.MirrorReflectance * cl;
+            }
+            else if(hit.Material.Type == 2)
+            {
+                auto vo = ray.Direction;
+                vo.Normalize();
+                auto reflect = vo - hit.Normal * 2 * Vector3f::Dot(hit.Normal, vo);
+                reflect.Normalize();
+
+                float ndi = Vector3f::Dot(hit.Normal, ray.Direction);
+                float ri = hit.Material.RefractionIndex;   
+                Vector3f normal = hit.Normal;
+                if(ndi > 0)
                 {
-                    Vector3f color = hit.Material.AmbientReflectance * ambientLight.Intensity;
-                    for(int l = 0; l < PointLights.size(); l++)
-                    {
-                        auto light = PointLights[l];                            
-                        // SHADOW CHECK
-                        auto wi = (light.Position - hit.Point).Normalized();
-                        auto sp = hit.Point + hit.Normal * ShadowRayEpsilon;
-                        float r = (light.Position - hit.Point).Magnitude();
-                        Ray sRay = Ray(sp, wi);
-                        RayHit sHit;
-                        bool sf = RayCast(sRay, sHit, r, false);
-                        if(sf && sHit.T < r)
-                            continue;
-                        // DIFFUSE
-                        float teta = Vector3f::Dot(wi, hit.Normal);
-                        teta = teta < 0 ? 0 : teta;
-                        color = color + hit.Material.DiffuseReflectance * teta * light.Intensity / (r * r);                            
-                        // SPECULAR
-                        auto wo = (cam.Position - hit.Point).Normalized();
-                        auto h = (wi + wo).Normalized();
-                        teta = Vector3f::Dot(h, hit.Normal);
-                        teta = teta < 0 ? 0 : teta;
-                        teta = std::pow(teta, hit.Material.PhongExponent);
-                        color = color + hit.Material.SpecularReflectance * teta * light.Intensity / (r * r);
-                    }
-                    pixels[p++] = color.X > 255 ? 255 : color.X;
-                    pixels[p++] = color.Y > 255 ? 255 : color.Y;
-                    pixels[p++] = color.Z > 255 ? 255 : color.Z;
-                    pixels[p++] = 255;
+                    normal = normal * -1;
+                    ri = 1;
                 }
                 else
                 {
-                    pixels[p++] = BackgroundColor.X;
-                    pixels[p++] = BackgroundColor.Y;
-                    pixels[p++] = BackgroundColor.Z;
-                    pixels[p++] = 255;
-                }  
+                    ndi *= -1; 
+                }                
+
+                float k = 1 - (ray.N/ri) * (ray.N/ri) * (1 - ndi * ndi);
+                if(k < 0)
+                {
+                    auto rray = Ray(hit.Point + normal * ShadowRayEpsilon, reflect);
+                    auto cl = Trace(rray, cam, depth - 1);
+                    color = color + cl * (Vector3f(1,1,1)-hit.Material.AbsorptionCoefficient);
+                }
+                else
+                {
+                    auto reftrac = (ray.Direction + normal * k) * (ray.N/ri) - normal * k;
+                    reftrac.Normalize();
+                    float rdi = Vector3f::Dot(reftrac, normal * -1);
+                    float r1 = (ri * ndi - rdi) / (ri * ndi + rdi);
+                    float r2 = (ndi - ri * rdi) / (ndi + ri * rdi);
+                    float fr = (r1 * r1 + r2 * r2) / 2;
+                    float ft = 1 - fr;
+                    auto rray = Ray(hit.Point + normal * ShadowRayEpsilon, reflect);
+                    auto cl = Trace(rray, cam, depth - 1);
+                    color = color + cl * fr;
+                    auto tray = Ray(hit.Point - normal * ShadowRayEpsilon, reftrac);
+                    tray.N = ri;
+                    cl = Trace(tray, cam, depth - 1);
+                    color = color + cl * (1 - fr);
+                }                
+            }
+            else if(hit.Material.Type == 1)
+            {
+                auto vo = ray.Direction;
+                vo.Normalize();
+                auto reflect = vo - hit.Normal * 2 * Vector3f::Dot(hit.Normal, vo);
+                reflect.Normalize();
+                float ndi = Vector3f::Dot(hit.Normal, ray.Direction * -1);
+                float n = hit.Material.RefractionIndex;
+                float k = hit.Material.AbsorptionIndex;
+                float rs = ((n * n + k * k) - 2 * n * ndi + ndi * ndi) / ((n * n + k * k) + 2 * n * ndi + ndi * ndi);
+                float rp = ((n * n + k * k) * ndi * ndi - 2 * n * ndi + 1) / ((n * n + k * k) * ndi * ndi + 2 * n * ndi + 1);
+                float fr = (rs + rp) / 2;
+                ray = Ray(hit.Point, reflect);
+                auto cl = Trace(ray, cam, depth - 1);
+                color = color + hit.Material.MirrorReflectance * cl * fr;
+            }
+            color = color + hit.Material.AmbientReflectance * ambientLight.Intensity;
+
+            for(int l = 0; l < PointLights.size(); l++)
+            {
+                auto light = PointLights[l];                            
+                // SHADOW CHECK
+                auto wi = (light.Position - hit.Point).Normalized();
+                auto sp = hit.Point + hit.Normal * ShadowRayEpsilon;
+                float r = (light.Position - hit.Point).Magnitude();
+                Ray sRay = Ray(sp, wi);
+                RayHit sHit;
+                bool sf = RayCast(sRay, sHit, r, false);
+                if(sf && sHit.T < r)
+                    continue;
+                // DIFFUSE
+                float teta = Vector3f::Dot(wi, hit.Normal);
+                teta = teta < 0 ? 0 : teta;
+                color = color + hit.Material.DiffuseReflectance * teta * light.Intensity / (r * r);                            
+                // SPECULAR
+                auto wo = (cam.Position - hit.Point).Normalized();
+                auto h = (wi + wo).Normalized();
+                teta = Vector3f::Dot(h, hit.Normal);
+                teta = teta < 0 ? 0 : teta;
+                teta = std::pow(teta, hit.Material.PhongExponent);
+                color = color + hit.Material.SpecularReflectance * teta * light.Intensity / (r * r);
             }
         }
+        else
+        {
+            color = BackgroundColor;
+        }  
+        return color;
     }
 
     void Scene::Render(int numThreads)
@@ -245,17 +198,34 @@ namespace raytracer
         {
             std::vector<unsigned char> pixels;
             pixels.resize(cam.ImageResolution.X * cam.ImageResolution.Y * 4);
-            int blockSize = cam.ImageResolution.Y / numThreads;
-            std::thread threads[numThreads];
-            for(int i = 0; i < numThreads; i++)
+            int size = cam.ImageResolution.X * cam.ImageResolution.Y;
+            int cores = std::thread::hardware_concurrency();
+            volatile std::atomic<int> count(0);
+            std::vector<std::future<void>> futures;
+            while(cores--)
             {
-                threads[i] = std::thread(&Scene::Trace, this, i * blockSize, (i + 1) * blockSize, std::ref(pixels), std::ref(cam));
-                //Trace(i * blockSize, (i + 1) * blockSize, pixels, cam);
+                futures.emplace_back(
+                    std::async([=, &count, &cam, &pixels]()
+                    {
+                        while(true)
+                        {
+                            int index = count++;
+                            if(index >= size)
+                                break;
+                            int x = index % cam.ImageResolution.X;
+                            int y = index / cam.ImageResolution.Y;
+                            auto ray = cam.GetRay(x, y);
+                            auto cl = Trace(ray, cam, 6);
+                            pixels[4 * index] = cl.X > 255 ? 255 : cl.X;
+                            pixels[4 * index + 1] = cl.Y > 255 ? 255 : cl.Y;
+                            pixels[4 * index + 2] = cl.Z > 255 ? 255 : cl.Z;
+                            pixels[4 * index + 3] = 255;
+                        }
+                    }
+                    )
+                );
             }
-            for (int i = 0; i < numThreads; i++)
-            {
-                threads[i].join();
-            }
+            futures.clear();
             std::vector<unsigned char> png;
             lodepng::encode(png, pixels, cam.ImageResolution.X, cam.ImageResolution.Y);
             lodepng::save_file(png, cam.ImageName);
