@@ -18,6 +18,7 @@ namespace raytracer
             Vector3f BackgroundColor;
             float ShadowRayEpsilon;
             float IntersectionTestEpsilon;
+            int MaxRecursionDepth;
             std::vector<Camera> Cameras;
             AmbientLight ambientLight;
             std::vector<PointLight> PointLights;
@@ -28,7 +29,7 @@ namespace raytracer
             IHittable* Root;
             friend std::ostream& operator<<(std::ostream& os, const Scene& scene);
         private:
-            bool RayCast(const Ray& ray, RayHit& hit, float maxDist, bool closest);
-            Vector3f Trace(Ray ray, Camera& cam, int depth);
+            bool RayCast(Ray& ray, RayHit& hit, float maxDist, bool closest);
+            Vector3f Trace(Ray& ray, Camera& cam, int depth);
     };
 }

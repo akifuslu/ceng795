@@ -16,7 +16,11 @@ namespace raytracer
         BackgroundColor =  Vector3f(node.child("BackgroundColor"));
         ShadowRayEpsilon = node.child("ShadowRayEpsilon").text().as_float();
         if(ShadowRayEpsilon == 0)
-            ShadowRayEpsilon = .000001f;
+            ShadowRayEpsilon = 0;//.001f;
+        MaxRecursionDepth = node.child("MaxRecursionDepth").text().as_int();
+        if(MaxRecursionDepth == 0)
+            MaxRecursionDepth = 1;
+
         IntersectionTestEpsilon = node.child("IntersectionTestEpsilon").text().as_float();
         auto cameras = node.child("Cameras");
         for(auto& camera: cameras.children())
@@ -74,12 +78,14 @@ namespace raytracer
         Root = new AABB(hs, Hittables.size());
     }
 
-    bool Scene::RayCast(const Ray& ray, RayHit& hit, float maxDist, bool closest)
+    bool Scene::RayCast(Ray& ray, RayHit& hit, float maxDist, bool closest)
     {
-        return Root->Hit(ray, hit);
+        auto ret = Root->Hit(ray, hit);
+        ray.Dist = (hit.Point - ray.Origin).Magnitude();
+        return ret;
     }
 
-    Vector3f Scene::Trace(Ray ray, Camera& cam, int depth)
+    Vector3f Scene::Trace(Ray& ray, Camera& cam, int depth)
     {
         Vector3f color(0, 0, 0);
         RayHit hit;              
@@ -99,47 +105,44 @@ namespace raytracer
             }
             else if(hit.Material.Type == 2)
             {
+                float n1 = ray.N; //from
+                float n2 = ray.N == 1 ? hit.Material.RefractionIndex : 1;//to
+                float ctheta = -Vector3f::Dot(ray.Direction, hit.Normal);
+                Vector3f normal = hit.Normal;
+                if(ctheta < 0) // flip normal
+                {
+                    ctheta *= -1;
+                    normal = normal * -1;
+                }
                 auto vo = ray.Direction;
                 vo.Normalize();
-                auto reflect = vo - hit.Normal * 2 * Vector3f::Dot(hit.Normal, vo);
+                auto reflect = vo - normal * 2 * Vector3f::Dot(normal, vo);
                 reflect.Normalize();
-
-                float ndi = Vector3f::Dot(hit.Normal, ray.Direction);
-                float ri = hit.Material.RefractionIndex;   
-                Vector3f normal = hit.Normal;
-                if(ndi > 0)
+                float cphi2 = 1 - (n1/n2)*(n1/n2)*(1 - ctheta*ctheta);
+                if(cphi2 < 0) // no reftrac
                 {
-                    normal = normal * -1;
-                    ri = 1;
+                    Ray rray = Ray(hit.Point + normal * ShadowRayEpsilon, reflect);
+                    rray.N = ray.N;
+                    color = color + Trace(rray, cam, depth - 1);
                 }
                 else
                 {
-                    ndi *= -1; 
-                }                
-
-                float k = 1 - (ray.N/ri) * (ray.N/ri) * (1 - ndi * ndi);
-                if(k < 0)
-                {
-                    auto rray = Ray(hit.Point + normal * ShadowRayEpsilon, reflect);
-                    auto cl = Trace(rray, cam, depth - 1);
-                    color = color + cl * (Vector3f(1,1,1)-hit.Material.AbsorptionCoefficient);
-                }
-                else
-                {
-                    auto reftrac = (ray.Direction + normal * k) * (ray.N/ri) - normal * k;
-                    reftrac.Normalize();
-                    float rdi = Vector3f::Dot(reftrac, normal * -1);
-                    float r1 = (ri * ndi - rdi) / (ri * ndi + rdi);
-                    float r2 = (ndi - ri * rdi) / (ndi + ri * rdi);
-                    float fr = (r1 * r1 + r2 * r2) / 2;
+                    float cphi = std::sqrt(cphi2);
+                    Vector3f reftrac = (ray.Direction + normal * ctheta) * (n1/n2) - normal * cphi;
+                    float r1 = (n2 * ctheta - n1 * cphi) / (n2 * ctheta + n1 * cphi);
+                    float r2 = (n1 * ctheta - n2 * cphi) / (n1 * ctheta + n2 * cphi);   
+                    float fr = (r1*r1 + r2*r2) / 2;
                     float ft = 1 - fr;
-                    auto rray = Ray(hit.Point + normal * ShadowRayEpsilon, reflect);
-                    auto cl = Trace(rray, cam, depth - 1);
-                    color = color + cl * fr;
-                    auto tray = Ray(hit.Point - normal * ShadowRayEpsilon, reftrac);
-                    tray.N = ri;
-                    cl = Trace(tray, cam, depth - 1);
-                    color = color + cl * (1 - fr);
+                    Ray rray = Ray(hit.Point + normal * ShadowRayEpsilon, reflect);
+                    rray.N = ray.N;
+                    color = color + Trace(rray, cam, depth - 1) * fr;
+                    Ray tray = Ray(hit.Point - normal * ShadowRayEpsilon, reftrac);
+                    tray.N = n2;
+                    auto l0 = Trace(tray, cam, depth - 1) * ft;
+                    l0.X = l0.X * std::exp(hit.Material.AbsorptionCoefficient.X * tray.Dist * -1);
+                    l0.Y = l0.Y * std::exp(hit.Material.AbsorptionCoefficient.Y * tray.Dist * -1);
+                    l0.Z = l0.Z * std::exp(hit.Material.AbsorptionCoefficient.Z * tray.Dist * -1);
+                    color = color + l0;
                 }                
             }
             else if(hit.Material.Type == 1)
@@ -148,16 +151,20 @@ namespace raytracer
                 vo.Normalize();
                 auto reflect = vo - hit.Normal * 2 * Vector3f::Dot(hit.Normal, vo);
                 reflect.Normalize();
-                float ndi = Vector3f::Dot(hit.Normal, ray.Direction * -1);
+                float ndi = -Vector3f::Dot(hit.Normal, ray.Direction);
                 float n = hit.Material.RefractionIndex;
                 float k = hit.Material.AbsorptionIndex;
-                float rs = ((n * n + k * k) - 2 * n * ndi + ndi * ndi) / ((n * n + k * k) + 2 * n * ndi + ndi * ndi);
-                float rp = ((n * n + k * k) * ndi * ndi - 2 * n * ndi + 1) / ((n * n + k * k) * ndi * ndi + 2 * n * ndi + 1);
+                float rs = ((n*n + k*k) - 2 * n * ndi + ndi * ndi) / ((n*n + k*k) + 2 * n * ndi + ndi * ndi);
+                float rp = ((n*n + k*k) * ndi*ndi - 2*n*ndi + 1) / ((n*n + k*k) * ndi*ndi + 2*n*ndi + 1);
                 float fr = (rs + rp) / 2;
-                ray = Ray(hit.Point, reflect);
-                auto cl = Trace(ray, cam, depth - 1);
-                color = color + hit.Material.MirrorReflectance * cl * fr;
+                Ray rray = Ray(hit.Point + hit.Normal * ShadowRayEpsilon, reflect);
+                auto cl = Trace(rray, cam, depth - 1);
+                color = color + (hit.Material.MirrorReflectance * cl) * fr;
             }
+
+            if(ray.N != 1)
+                return color;
+
             color = color + hit.Material.AmbientReflectance * ambientLight.Intensity;
 
             for(int l = 0; l < PointLights.size(); l++)
@@ -213,9 +220,9 @@ namespace raytracer
                             if(index >= size)
                                 break;
                             int x = index % cam.ImageResolution.X;
-                            int y = index / cam.ImageResolution.Y;
+                            int y = index / cam.ImageResolution.X;
                             auto ray = cam.GetRay(x, y);
-                            auto cl = Trace(ray, cam, 6);
+                            auto cl = Trace(ray, cam, MaxRecursionDepth);
                             pixels[4 * index] = cl.X > 255 ? 255 : cl.X;
                             pixels[4 * index + 1] = cl.Y > 255 ? 255 : cl.Y;
                             pixels[4 * index + 2] = cl.Z > 255 ? 255 : cl.Z;

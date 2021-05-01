@@ -13,5 +13,6 @@ namespace raytracer
             Vector3f InvDir;
             int Sign[3];
             float N = 1;
+            float Dist;
     };
 }

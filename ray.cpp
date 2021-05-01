@@ -10,5 +10,6 @@ namespace raytracer
         Sign[0] = (Direction.X > 0 ? 0 : 1);
         Sign[1] = (Direction.Y > 0 ? 0 : 1);
         Sign[2] = (Direction.Z > 0 ? 0 : 1);
+        N = 1;
     }
 }

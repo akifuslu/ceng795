@@ -1,12 +1,13 @@
 <Scene>
+	<MaxRecursionDepth> 6 </MaxRecursionDepth>	
     <BackgroundColor>0 0 0</BackgroundColor>
     <ShadowRayEpsilon>1e-3</ShadowRayEpsilon>
     <IntersectionTestEpsilon>1e-6</IntersectionTestEpsilon>
 
     <Cameras>
         <Camera id="1">
-            <Position> 0 2.5 0 </Position>
-            <Gaze> 0 -0.2 -1 </Gaze> <!-- Watch out: make the uvw vectors orthonormal -->
+            <Position> 0 0 0 </Position>
+            <Gaze> 0 0 -1 </Gaze>
             <Up> 0 1 0 </Up>
             <NearPlane> -1 1 -1 1 10</NearPlane>
             <NearDistance>10</NearDistance>
@@ -19,11 +20,11 @@
         <AmbientLight> 25 25 25 </AmbientLight>
         <PointLight id="1">
             <Position> -4 4 -13  </Position>
-            <Intensity> 8550 8550 8550 </Intensity> 
+            <Intensity> 4550 4550 4550 </Intensity> 
         </PointLight>
         <PointLight id="2">
             <Position> 4 4 -13  </Position>
-            <Intensity> 8550 8550 8550 </Intensity> 
+            <Intensity> 4550 4550 4550 </Intensity> 
         </PointLight>
     </Lights>
 
@@ -34,11 +35,12 @@
             <SpecularReflectance> 1 1 1 </SpecularReflectance>
             <PhongExponent>100</PhongExponent>
         </Material>	
-        <Material id="2">
+        <Material id="2" type="mirror">
             <AmbientReflectance> 1 1 1 </AmbientReflectance>
             <DiffuseReflectance> 1 0 0 </DiffuseReflectance>
             <SpecularReflectance> 1 1 1 </SpecularReflectance>
             <PhongExponent>100</PhongExponent>
+            <MirrorReflectance> 1 1 1 </MirrorReflectance>
         </Material>	
         <Material id="3">
             <AmbientReflectance> 1 1 1 </AmbientReflectance>
@@ -46,11 +48,12 @@
             <SpecularReflectance> 1 1 1 </SpecularReflectance>
             <PhongExponent>100</PhongExponent>
         </Material>	
-        <Material id="4">
+        <Material id="4" type="mirror">
             <AmbientReflectance> 1 1 1 </AmbientReflectance>
             <DiffuseReflectance> 0.2 0.2 0.2 </DiffuseReflectance>
             <SpecularReflectance> 0 0 0 </SpecularReflectance>
             <PhongExponent>1</PhongExponent>
+            <MirrorReflectance> 1 1 1 </MirrorReflectance>
         </Material>	
         <Material id="5">
             <AmbientReflectance> 1 1 1 </AmbientReflectance>
@@ -69,7 +72,7 @@
 		0.5 -0.5 -15 
 		1.0 -0.5 -16 
 		-1.0 -0.5 -13
-		-0.2 -0.5 -14
+		-0.8 -0.5 -12
 	</VertexData>
 
     <Objects>

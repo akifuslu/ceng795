@@ -1,6 +1,8 @@
 <Scene>
     <BackgroundColor>0 0 0</BackgroundColor>
 
+    <MaxRecursionDepth>6</MaxRecursionDepth>
+
     <Cameras>
         <Camera id="1">
             <Position>5 5 10</Position>
@@ -34,16 +36,20 @@
             <SpecularReflectance>0.000000 0.000000 0.000000</SpecularReflectance>
             <PhongExponent>50</PhongExponent>
         </Material>
-        <Material id="3">
+        <Material id="3" type="dielectric">
             <AmbientReflectance>0.200000 0.200000 0.200000</AmbientReflectance>
             <DiffuseReflectance>0.200000 0.200000 0.200000</DiffuseReflectance>
             <SpecularReflectance>0.500000 0.500000 0.500000</SpecularReflectance>
             <PhongExponent>3</PhongExponent>
+            <AbsorptionCoefficient>0.01 0.01 0.01</AbsorptionCoefficient>
+            <RefractionIndex>1.5</RefractionIndex>
         </Material>
-        <Material id="4">
+        <Material id="4" type="mirror">
             <AmbientReflectance>1 1 1</AmbientReflectance>
             <DiffuseReflectance>0.640000 0.640000 0.640000</DiffuseReflectance>
             <SpecularReflectance>0 0 0</SpecularReflectance>
+            <MirrorReflectance>0.5 0.5 0.5</MirrorReflectance>
+            <PhongExponent>1</PhongExponent>
         </Material>
     </Materials>
 
@@ -1191,7 +1197,7 @@
 
     <Objects>
         <Mesh id="1">
-            <Material>1</Material> 
+            <Material>1</Material> <!-- White -->
             <Faces>
                 453 452 451
                 453 451 450
@@ -3444,7 +3450,7 @@
             </Faces>
         </Mesh>
         <Mesh id="4">
-            <Material>4</Material>
+            <Material>4</Material>  <!-- Reflectance -->
             <Faces>
                 1137 1138 1136
                 1137 1139 1138

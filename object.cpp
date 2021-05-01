@@ -243,10 +243,11 @@ namespace raytracer
     {
         hit.T = FLT_MAX;
         Vector3f pvec = Vector3f::Cross(ray.Direction, V0V2);
-        
         float det = Vector3f::Dot(V0V1, pvec);
-        if (det < 0)
+        if (std::fabs(det) < 0)
+        {            
             return false;
+        }
 
         float invDet = 1.0 / det;
         Vector3f tvec = ray.Origin - (*V0);
@@ -259,13 +260,20 @@ namespace raytracer
         if (v < 0 || u + v > 1)
             return false;
         float t = Vector3f::Dot(V0V2, qvec) * invDet;
-        if(t <= 0)
+        if(t < 1e-2)
         {
             return false;
         }
         hit.T = t;
         hit.Point = ray.Origin + ray.Direction * t;
-        hit.Normal = Normal;
+        if(Vector3f::Dot(ray.Direction, Normal) > 0)
+        {
+            hit.Normal = Normal * -1;            
+        }
+        else
+        {
+            hit.Normal = Normal;
+        }
         hit.Material = *_material;
         return true;
     }
