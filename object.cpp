@@ -22,11 +22,6 @@ namespace raytracer
         return obj.Print(os);
     }
 
-    //bool Object::Hit(const Ray& ray, RayHit& hit)
-    //{
-    //    return false;
-    //}
-
     void Object::Load(std::vector<Vector3f>& vertexData, std::vector<Material>& materials)
     {
         _material = materials[MaterialId - 1];
@@ -74,28 +69,6 @@ namespace raytracer
         return os;
     }
 
-    //bool Mesh::Hit(const Ray& ray, RayHit& hit)
-    //{
-    //    bool flag = false;
-    //    float t = FLT_MAX;        
-    //    for (size_t i = 0; i < _faces.size(); i++)
-    //    {
-    //        RayHit tHit;
-    //        if(_faces[i].Hit(ray, tHit))
-    //        {
-    //            flag = true;
-    //            if(tHit.T < t)
-    //            {
-    //                t = tHit.T;
-    //                hit = tHit;
-    //            }                
-    //        }
-    //    }       
-    //    hit.Object = this;     
-    //    hit.Material = _material;
-    //    return flag;
-    //}
-
     void Mesh::Load(std::vector<Vector3f>& vertexData, std::vector<Material>& materials)
     {
         Object::Load(vertexData, materials);
@@ -110,7 +83,7 @@ namespace raytracer
         {        
             for(auto& f: Faces)
             {
-                _faces.push_back(Face(&vertexData[f.X - 1], &vertexData[f.Y - 1], &vertexData[f.Z - 1], &_material));
+                _faces.push_back(Face(&vertexData[f.x() - 1], &vertexData[f.y() - 1], &vertexData[f.z() - 1], &_material));
             }            
         }
     }   
@@ -145,7 +118,7 @@ namespace raytracer
     void Triangle::Load(std::vector<Vector3f>& vertexData, std::vector<Material>& materials)
     {
         Object::Load(vertexData, materials);
-        _face = Face(&vertexData[Indices.X - 1], &vertexData[Indices.Y - 1], &vertexData[Indices.Z - 1], &_material);        
+        _face = Face(&vertexData[Indices.x() - 1], &vertexData[Indices.y() - 1], &vertexData[Indices.z() - 1], &_material);        
     }   
 
     std::vector<IHittable*> Triangle::GetHittables()
@@ -173,12 +146,12 @@ namespace raytracer
     {
         Object::Load(vertexData, materials);
         _center = vertexData[CenterId - 1];
-        Bounds[0].X = _center.X - Radius;
-        Bounds[0].Y = _center.Y - Radius;
-        Bounds[0].Z = _center.Z - Radius;
-        Bounds[1].X = _center.X + Radius;
-        Bounds[1].Y = _center.Y + Radius;
-        Bounds[1].Z = _center.Z + Radius;
+        Bounds[0].x() = _center.x() - Radius;
+        Bounds[0].y() = _center.y() - Radius;
+        Bounds[0].z() = _center.z() - Radius;
+        Bounds[1].x() = _center.x() + Radius;
+        Bounds[1].y() = _center.y() + Radius;
+        Bounds[1].z() = _center.z() + Radius;
         Center = (Bounds[0] + Bounds[1]) / 2;        
     }   
     
@@ -186,9 +159,9 @@ namespace raytracer
     {
         hit.T = FLT_MAX;
         Vector3f oc = ray.Origin - _center;
-        float a = Vector3f::Dot(ray.Direction, ray.Direction);
-        float b = 2.0 * Vector3f::Dot(oc, ray.Direction);
-        float c = Vector3f::Dot(oc,oc) - Radius * Radius;
+        float a = ray.Direction.dot(ray.Direction);
+        float b = 2.0 * oc.dot(ray.Direction);
+        float c = oc.dot(oc) - Radius * Radius;
         float discriminant = b*b - 4*a*c;
         if(discriminant < 0)
         {
@@ -207,7 +180,7 @@ namespace raytracer
             hit.T = t;
             hit.Object = this;
             hit.Point = ray.Origin + ray.Direction * hit.T;
-            hit.Normal = (hit.Point - _center).Normalized();
+            hit.Normal = (hit.Point - _center).normalized();
             hit.Material = _material;
             return true;
         }
@@ -227,23 +200,23 @@ namespace raytracer
         : V0(v0), V1(v1), V2(v2)
     {
         _material = material;
-        Normal = Vector3f::Cross((*v1) - (*v0), (*v2) - (*v0)).Normalized();
+        Normal = ((*v1) - (*v0)).cross((*v2) - (*v0)).normalized();
         V0V1 = (*V1) - (*V0);
         V0V2 = (*V2) - (*V0);
-        Bounds[0].X = std::min(std::min(V0->X, V1->X), V2->X);
-        Bounds[0].Y = std::min(std::min(V0->Y, V1->Y), V2->Y);
-        Bounds[0].Z = std::min(std::min(V0->Z, V1->Z), V2->Z);
-        Bounds[1].X = std::max(std::max(V0->X, V1->X), V2->X);
-        Bounds[1].Y = std::max(std::max(V0->Y, V1->Y), V2->Y);
-        Bounds[1].Z = std::max(std::max(V0->Z, V1->Z), V2->Z);
+        Bounds[0].x() = std::min(std::min(V0->x(), V1->x()), V2->x());
+        Bounds[0].y() = std::min(std::min(V0->y(), V1->y()), V2->y());
+        Bounds[0].z() = std::min(std::min(V0->z(), V1->z()), V2->z());
+        Bounds[1].x() = std::max(std::max(V0->x(), V1->x()), V2->x());
+        Bounds[1].y() = std::max(std::max(V0->y(), V1->y()), V2->y());
+        Bounds[1].z() = std::max(std::max(V0->z(), V1->z()), V2->z());
         Center = (Bounds[0] + Bounds[1]) / 2;
     }
 
     bool Face::Hit(const Ray& ray, RayHit& hit)
     {
         hit.T = FLT_MAX;
-        Vector3f pvec = Vector3f::Cross(ray.Direction, V0V2);
-        float det = Vector3f::Dot(V0V1, pvec);
+        Vector3f pvec = ray.Direction.cross(V0V2);
+        float det = V0V1.dot(pvec);
         if (std::fabs(det) < 0)
         {            
             return false;
@@ -251,22 +224,22 @@ namespace raytracer
 
         float invDet = 1.0 / det;
         Vector3f tvec = ray.Origin - (*V0);
-        float u = Vector3f::Dot(tvec, pvec) * invDet;
+        float u = tvec.dot(pvec) * invDet;
         if (u < 0 || u > 1)
             return false;
 
-        Vector3f qvec = Vector3f::Cross(tvec, V0V1);
-        float v = Vector3f::Dot(ray.Direction, qvec) * invDet;
+        Vector3f qvec = tvec.cross(V0V1);
+        float v = ray.Direction.dot(qvec) * invDet;
         if (v < 0 || u + v > 1)
             return false;
-        float t = Vector3f::Dot(V0V2, qvec) * invDet;
+        float t = V0V2.dot(qvec) * invDet;
         if(t < 1e-2)
         {
             return false;
         }
         hit.T = t;
         hit.Point = ray.Origin + ray.Direction * t;
-        if(Vector3f::Dot(ray.Direction, Normal) > 0)
+        if(ray.Direction.dot(Normal) > 0)
         {
             hit.Normal = Normal * -1;            
         }
@@ -281,47 +254,58 @@ namespace raytracer
     int Split(IHittable** hs, int count, float p, int axis)
     {
         int mid = 0;
-        switch (axis)
+        for(int i = 0; i < count; i++)
         {
-        case 0:
-            for(int i = 0; i < count; i++)
+            if(hs[i]->Center(axis) < p)
             {
-                if(hs[i]->Center.X < p)
-                {
-                    auto tmp = hs[i];
-                    hs[i] = hs[mid];
-                    hs[mid] = tmp;
-                    mid++;
-                }
+                auto tmp = hs[i];
+                hs[i] = hs[mid];
+                hs[mid] = tmp;
+                mid++;
             }
-            break;
-        case 1:
-            for(int i = 0; i < count; i++)
-            {
-                if(hs[i]->Center.Y < p)
-                {
-                    auto tmp = hs[i];
-                    hs[i] = hs[mid];
-                    hs[mid] = tmp;
-                    mid++;
-                }
-            }
-            break;        
-        case 2:
-            for(int i = 0; i < count; i++)
-            {
-                if(hs[i]->Center.Z < p)
-                {
-                    auto tmp = hs[i];
-                    hs[i] = hs[mid];
-                    hs[mid] = tmp;
-                    mid++;
-                }
-            }
-            break;
-        default:
-            break;
         }
+
+        //switch (axis)
+        //{
+        //case 0:
+        //    for(int i = 0; i < count; i++)
+        //    {
+        //        if(hs[i]->Center.X < p)
+        //        {
+        //            auto tmp = hs[i];
+        //            hs[i] = hs[mid];
+        //            hs[mid] = tmp;
+        //            mid++;
+        //        }
+        //    }
+        //    break;
+        //case 1:
+        //    for(int i = 0; i < count; i++)
+        //    {
+        //        if(hs[i]->Center.Y < p)
+        //        {
+        //            auto tmp = hs[i];
+        //            hs[i] = hs[mid];
+        //            hs[mid] = tmp;
+        //            mid++;
+        //        }
+        //    }
+        //    break;        
+        //case 2:
+        //    for(int i = 0; i < count; i++)
+        //    {
+        //        if(hs[i]->Center.Z < p)
+        //        {
+        //            auto tmp = hs[i];
+        //            hs[i] = hs[mid];
+        //            hs[mid] = tmp;
+        //            mid++;
+        //        }
+        //    }
+        //    break;
+        //default:
+        //    break;
+        //}
         if(mid == 0 || mid == count) mid = count / 2;
         return mid;
     }
@@ -335,19 +319,19 @@ namespace raytracer
         aabb->Bounds[1] = hs[0]->Bounds[1];
         for(int i = 1; i < count; i++)
         {
-            aabb->Bounds[0].X = std::min(aabb->Bounds[0].X, hs[i]->Bounds[0].X);
-            aabb->Bounds[0].Y = std::min(aabb->Bounds[0].Y, hs[i]->Bounds[0].Y);
-            aabb->Bounds[0].Z = std::min(aabb->Bounds[0].Z, hs[i]->Bounds[0].Z);
-            aabb->Bounds[1].X = std::max(aabb->Bounds[1].X, hs[i]->Bounds[1].X);
-            aabb->Bounds[1].Y = std::max(aabb->Bounds[1].Y, hs[i]->Bounds[1].Y);
-            aabb->Bounds[1].Z = std::max(aabb->Bounds[1].Z, hs[i]->Bounds[1].Z);
+            aabb->Bounds[0].x() = std::min(aabb->Bounds[0].x(), hs[i]->Bounds[0].x());
+            aabb->Bounds[0].y() = std::min(aabb->Bounds[0].y(), hs[i]->Bounds[0].y());
+            aabb->Bounds[0].z() = std::min(aabb->Bounds[0].z(), hs[i]->Bounds[0].z());
+            aabb->Bounds[1].x() = std::max(aabb->Bounds[1].x(), hs[i]->Bounds[1].x());
+            aabb->Bounds[1].y() = std::max(aabb->Bounds[1].y(), hs[i]->Bounds[1].y());
+            aabb->Bounds[1].z() = std::max(aabb->Bounds[1].z(), hs[i]->Bounds[1].z());
         }
         aabb->Center = (aabb->Bounds[0] + aabb->Bounds[1]) / 2;
-        float pivot = aabb->Center.X;
+        float pivot = aabb->Center.x();
         if(axis == 1)
-            pivot = aabb->Center.Y;
+            pivot = aabb->Center.y();
         else if(axis == 2)
-            pivot = aabb->Center.Z;
+            pivot = aabb->Center.z();
         int mid = Split(hs, count, pivot, axis);
         aabb->Left = Build(hs, mid, (axis + 1) % 3);
         aabb->Right = Build(&hs[mid], count - mid, (axis + 1) % 3);
@@ -358,12 +342,12 @@ namespace raytracer
     {
         Left = left;
         Right = right;
-        Bounds[0].X = std::min(left->Bounds[0].X, right->Bounds[0].X);
-        Bounds[0].Y = std::min(left->Bounds[0].Y, right->Bounds[0].Y);
-        Bounds[0].Z = std::min(left->Bounds[0].Z, right->Bounds[0].Z);        
-        Bounds[1].X = std::max(left->Bounds[1].X, right->Bounds[1].X);
-        Bounds[1].Y = std::max(left->Bounds[1].Y, right->Bounds[1].Y);
-        Bounds[1].Z = std::max(left->Bounds[1].Z, right->Bounds[1].Z); 
+        Bounds[0].x() = std::min(left->Bounds[0].x(), right->Bounds[0].x());
+        Bounds[0].y() = std::min(left->Bounds[0].y(), right->Bounds[0].y());
+        Bounds[0].z() = std::min(left->Bounds[0].z(), right->Bounds[0].z());        
+        Bounds[1].x() = std::max(left->Bounds[1].x(), right->Bounds[1].x());
+        Bounds[1].y() = std::max(left->Bounds[1].y(), right->Bounds[1].y());
+        Bounds[1].z() = std::max(left->Bounds[1].z(), right->Bounds[1].z()); 
         Center = (Bounds[0] + Bounds[1]) / 2;
     }
 
@@ -382,17 +366,17 @@ namespace raytracer
         Bounds[1] = hs[0]->Bounds[1];
         for(int i = 1; i < count; i++)
         {
-            Bounds[0].X = std::min(Bounds[0].X, hs[i]->Bounds[0].X);
-            Bounds[0].Y = std::min(Bounds[0].Y, hs[i]->Bounds[0].Y);
-            Bounds[0].Z = std::min(Bounds[0].Z, hs[i]->Bounds[0].Z);
-            Bounds[1].X = std::max(Bounds[1].X, hs[i]->Bounds[1].X);
-            Bounds[1].Y = std::max(Bounds[1].Y, hs[i]->Bounds[1].Y);
-            Bounds[1].Z = std::max(Bounds[1].Z, hs[i]->Bounds[1].Z);
+            Bounds[0].x() = std::min(Bounds[0].x(), hs[i]->Bounds[0].x());
+            Bounds[0].y() = std::min(Bounds[0].y(), hs[i]->Bounds[0].y());
+            Bounds[0].z() = std::min(Bounds[0].z(), hs[i]->Bounds[0].z());
+            Bounds[1].x() = std::max(Bounds[1].x(), hs[i]->Bounds[1].x());
+            Bounds[1].y() = std::max(Bounds[1].y(), hs[i]->Bounds[1].y());
+            Bounds[1].z() = std::max(Bounds[1].z(), hs[i]->Bounds[1].z());
         }
         Center = (Bounds[0] + Bounds[1]) / 2;
         if(count > 2)
         {
-            int mid = Split(hs, count, Center.X, 0);
+            int mid = Split(hs, count, Center.x(), 0);
             Left = Build(hs, mid, 1);
             Right = Build(&hs[mid], count - mid, 1);
         }
@@ -403,20 +387,20 @@ namespace raytracer
         hit.T = FLT_MAX;
         float imin = FLT_MIN;
         float imax = FLT_MAX;
-        float t0 = (Bounds[ray.Sign[0]].X - ray.Origin.X) * ray.InvDir.X;
-        float t1 = (Bounds[1 - ray.Sign[0]].X - ray.Origin.X) * ray.InvDir.X;
+        float t0 = (Bounds[ray.Sign[0]].x() - ray.Origin.x()) * ray.InvDir.x();
+        float t1 = (Bounds[1 - ray.Sign[0]].x() - ray.Origin.x()) * ray.InvDir.x();
         if(t0 > imin) imin = t0;
         if(t1 < imax) imax = t1;
         if(imin > imax) return false;
 
-        t0 = (Bounds[ray.Sign[1]].Y - ray.Origin.Y) * ray.InvDir.Y;
-        t1 = (Bounds[1 - ray.Sign[1]].Y - ray.Origin.Y) * ray.InvDir.Y;
+        t0 = (Bounds[ray.Sign[1]].y() - ray.Origin.y()) * ray.InvDir.y();
+        t1 = (Bounds[1 - ray.Sign[1]].y() - ray.Origin.y()) * ray.InvDir.y();
         if(t0 > imin) imin = t0;
         if(t1 < imax) imax = t1;
         if(imin > imax) return false;
 
-        t0 = (Bounds[ray.Sign[2]].Z - ray.Origin.Z) * ray.InvDir.Z;
-        t1 = (Bounds[1 - ray.Sign[2]].Z - ray.Origin.Z) * ray.InvDir.Z;
+        t0 = (Bounds[ray.Sign[2]].z() - ray.Origin.z()) * ray.InvDir.z();
+        t1 = (Bounds[1 - ray.Sign[2]].z() - ray.Origin.z()) * ray.InvDir.z();
         if(t0 > t1) std::swap(t0, t1);
         if(t0 > imin) imin = t0;
         if(t1 < imax) imax = t1;

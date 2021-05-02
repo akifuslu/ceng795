@@ -1,11 +1,14 @@
 #pragma once
-#include "vector.h"
+#include "vecfrom.h"
 #include "camera.h"
 #include "light.h"
 #include "material.h"
 #include "object.h"
 #include "pugixml.hpp"
+#include "Eigen/Dense"
 #include <vector>
+
+using namespace Eigen;
 
 namespace raytracer
 {

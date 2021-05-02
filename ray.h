@@ -1,6 +1,8 @@
 #pragma once
-#include "vector.h"
+#include "Eigen/Dense"
 #include "material.h"
+
+using namespace Eigen;
 
 namespace raytracer
 {

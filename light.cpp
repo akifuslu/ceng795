@@ -4,12 +4,12 @@ namespace raytracer
 {
     AmbientLight::AmbientLight(pugi::xml_node node)
     {
-        Intensity = Vector3f(node);
+        Intensity = Vec3fFrom(node);
     }    
 
     PointLight::PointLight(pugi::xml_node node)
     {
-        Intensity = Vector3f(node.child("Intensity"));
-        Position = Vector3f(node.child("Position"));
+        Intensity = Vec3fFrom(node.child("Intensity"));
+        Position = Vec3fFrom(node.child("Position"));
     }
 }

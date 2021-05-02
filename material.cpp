@@ -7,14 +7,14 @@ namespace raytracer
 
     Material::Material(pugi::xml_node node)
     {
-        AmbientReflectance = Vector3f(node.child("AmbientReflectance"));
-        DiffuseReflectance = Vector3f(node.child("DiffuseReflectance"));
-        SpecularReflectance = Vector3f(node.child("SpecularReflectance"));                
+        AmbientReflectance = Vec3fFrom(node.child("AmbientReflectance"));
+        DiffuseReflectance = Vec3fFrom(node.child("DiffuseReflectance"));
+        SpecularReflectance = Vec3fFrom(node.child("SpecularReflectance"));                
         PhongExponent = node.child("PhongExponent").text().as_float();
-        MirrorReflectance = Vector3f(node.child("MirrorReflectance"));
+        MirrorReflectance = Vec3fFrom(node.child("MirrorReflectance"));
         RefractionIndex = node.child("RefractionIndex").text().as_float();
         AbsorptionIndex = node.child("AbsorptionIndex").text().as_float();
-        AbsorptionCoefficient = Vector3f(node.child("AbsorptionCoefficient"));
+        AbsorptionCoefficient = Vec3fFrom(node.child("AbsorptionCoefficient"));
         if(std::strcmp(node.attribute("type").as_string(), "conductor") == 0)
         {
             Type = 1;            

@@ -13,7 +13,7 @@ namespace raytracer
 {
     Scene::Scene(pugi::xml_node node)
     {
-        BackgroundColor =  Vector3f(node.child("BackgroundColor"));
+        BackgroundColor =  Vec3fFrom(node.child("BackgroundColor"));
         ShadowRayEpsilon = node.child("ShadowRayEpsilon").text().as_float();
         if(ShadowRayEpsilon == 0)
             ShadowRayEpsilon = 0;//.001f;
@@ -81,7 +81,7 @@ namespace raytracer
     bool Scene::RayCast(Ray& ray, RayHit& hit, float maxDist, bool closest)
     {
         auto ret = Root->Hit(ray, hit);
-        ray.Dist = (hit.Point - ray.Origin).Magnitude();
+        ray.Dist = (hit.Point - ray.Origin).norm();
         return ret;
     }
 
@@ -96,18 +96,18 @@ namespace raytracer
             if(hit.Material.Type == 3)
             {
                 auto vo = ray.Direction;
-                vo.Normalize();
-                auto reflect = vo - hit.Normal * 2 * Vector3f::Dot(hit.Normal, vo);
-                reflect.Normalize();
+                vo.normalize();
+                Vector3f reflect = vo - hit.Normal * 2 * hit.Normal.dot(vo);
+                reflect.normalize();
                 ray = Ray(hit.Point, reflect);
                 auto cl = Trace(ray, cam, depth - 1);
-                color = color + hit.Material.MirrorReflectance * cl;
+                color = color + hit.Material.MirrorReflectance.cwiseProduct(cl);
             }
             else if(hit.Material.Type == 2)
             {
                 float n1 = ray.N; //from
                 float n2 = ray.N == 1 ? hit.Material.RefractionIndex : 1;//to
-                float ctheta = -Vector3f::Dot(ray.Direction, hit.Normal);
+                float ctheta = -ray.Direction.dot(hit.Normal);
                 Vector3f normal = hit.Normal;
                 if(ctheta < 0) // flip normal
                 {
@@ -115,9 +115,9 @@ namespace raytracer
                     normal = normal * -1;
                 }
                 auto vo = ray.Direction;
-                vo.Normalize();
-                auto reflect = vo - normal * 2 * Vector3f::Dot(normal, vo);
-                reflect.Normalize();
+                vo.normalize();
+                Vector3f reflect = vo - normal * 2 * normal.dot(vo);
+                reflect.normalize();
                 float cphi2 = 1 - (n1/n2)*(n1/n2)*(1 - ctheta*ctheta);
                 if(cphi2 < 0) // no reftrac
                 {
@@ -138,20 +138,20 @@ namespace raytracer
                     color = color + Trace(rray, cam, depth - 1) * fr;
                     Ray tray = Ray(hit.Point - normal * ShadowRayEpsilon, reftrac);
                     tray.N = n2;
-                    auto l0 = Trace(tray, cam, depth - 1) * ft;
-                    l0.X = l0.X * std::exp(hit.Material.AbsorptionCoefficient.X * tray.Dist * -1);
-                    l0.Y = l0.Y * std::exp(hit.Material.AbsorptionCoefficient.Y * tray.Dist * -1);
-                    l0.Z = l0.Z * std::exp(hit.Material.AbsorptionCoefficient.Z * tray.Dist * -1);
+                    Vector3f l0 = Trace(tray, cam, depth - 1) * ft;
+                    l0.x() = l0.x() * std::exp(hit.Material.AbsorptionCoefficient.x() * tray.Dist * -1);
+                    l0.y() = l0.y() * std::exp(hit.Material.AbsorptionCoefficient.y() * tray.Dist * -1);
+                    l0.z() = l0.z() * std::exp(hit.Material.AbsorptionCoefficient.z() * tray.Dist * -1);
                     color = color + l0;
                 }                
             }
             else if(hit.Material.Type == 1)
             {
                 auto vo = ray.Direction;
-                vo.Normalize();
-                auto reflect = vo - hit.Normal * 2 * Vector3f::Dot(hit.Normal, vo);
-                reflect.Normalize();
-                float ndi = -Vector3f::Dot(hit.Normal, ray.Direction);
+                vo.normalize();
+                Vector3f reflect = vo - hit.Normal * 2 * hit.Normal.dot(vo);
+                reflect.normalize();
+                float ndi = -hit.Normal.dot(ray.Direction);
                 float n = hit.Material.RefractionIndex;
                 float k = hit.Material.AbsorptionIndex;
                 float rs = ((n*n + k*k) - 2 * n * ndi + ndi * ndi) / ((n*n + k*k) + 2 * n * ndi + ndi * ndi);
@@ -159,37 +159,37 @@ namespace raytracer
                 float fr = (rs + rp) / 2;
                 Ray rray = Ray(hit.Point + hit.Normal * ShadowRayEpsilon, reflect);
                 auto cl = Trace(rray, cam, depth - 1);
-                color = color + (hit.Material.MirrorReflectance * cl) * fr;
+                color = color + hit.Material.MirrorReflectance.cwiseProduct(cl) * fr;
             }
 
             if(ray.N != 1)
                 return color;
 
-            color = color + hit.Material.AmbientReflectance * ambientLight.Intensity;
+            color = color + hit.Material.AmbientReflectance.cwiseProduct(ambientLight.Intensity);
 
             for(int l = 0; l < PointLights.size(); l++)
             {
                 auto light = PointLights[l];                            
                 // SHADOW CHECK
-                auto wi = (light.Position - hit.Point).Normalized();
-                auto sp = hit.Point + hit.Normal * ShadowRayEpsilon;
-                float r = (light.Position - hit.Point).Magnitude();
+                Vector3f wi = (light.Position - hit.Point).normalized();
+                Vector3f sp = hit.Point + hit.Normal * ShadowRayEpsilon;
+                float r = (light.Position - hit.Point).norm();
                 Ray sRay = Ray(sp, wi);
                 RayHit sHit;
                 bool sf = RayCast(sRay, sHit, r, false);
                 if(sf && sHit.T < r)
                     continue;
                 // DIFFUSE
-                float teta = Vector3f::Dot(wi, hit.Normal);
+                float teta = wi.dot(hit.Normal);
                 teta = teta < 0 ? 0 : teta;
-                color = color + hit.Material.DiffuseReflectance * teta * light.Intensity / (r * r);                            
+                color += hit.Material.DiffuseReflectance.cwiseProduct(light.Intensity) * teta / (r * r);                            
                 // SPECULAR
-                auto wo = (cam.Position - hit.Point).Normalized();
-                auto h = (wi + wo).Normalized();
-                teta = Vector3f::Dot(h, hit.Normal);
+                Vector3f wo = (cam.Position - hit.Point).normalized();
+                Vector3f h = (wi + wo).normalized();
+                teta = h.dot(hit.Normal);
                 teta = teta < 0 ? 0 : teta;
                 teta = std::pow(teta, hit.Material.PhongExponent);
-                color = color + hit.Material.SpecularReflectance * teta * light.Intensity / (r * r);
+                color += hit.Material.SpecularReflectance.cwiseProduct(light.Intensity) * teta / (r * r);
             }
         }
         else
@@ -204,8 +204,8 @@ namespace raytracer
         for(auto& cam: Cameras)
         {
             std::vector<unsigned char> pixels;
-            pixels.resize(cam.ImageResolution.X * cam.ImageResolution.Y * 4);
-            int size = cam.ImageResolution.X * cam.ImageResolution.Y;
+            pixels.resize(cam.ImageResolution.x() * cam.ImageResolution.y() * 4);
+            int size = cam.ImageResolution.x() * cam.ImageResolution.y();
             int cores = std::thread::hardware_concurrency();
             volatile std::atomic<int> count(0);
             std::vector<std::future<void>> futures;
@@ -219,13 +219,13 @@ namespace raytracer
                             int index = count++;
                             if(index >= size)
                                 break;
-                            int x = index % cam.ImageResolution.X;
-                            int y = index / cam.ImageResolution.X;
+                            int x = index % cam.ImageResolution.x();
+                            int y = index / cam.ImageResolution.x();
                             auto ray = cam.GetRay(x, y);
                             auto cl = Trace(ray, cam, MaxRecursionDepth);
-                            pixels[4 * index] = cl.X > 255 ? 255 : cl.X;
-                            pixels[4 * index + 1] = cl.Y > 255 ? 255 : cl.Y;
-                            pixels[4 * index + 2] = cl.Z > 255 ? 255 : cl.Z;
+                            pixels[4 * index] = cl.x() > 255 ? 255 : cl.x();
+                            pixels[4 * index + 1] = cl.y() > 255 ? 255 : cl.y();
+                            pixels[4 * index + 2] = cl.z() > 255 ? 255 : cl.z();
                             pixels[4 * index + 3] = 255;
                         }
                     }
@@ -234,7 +234,7 @@ namespace raytracer
             }
             futures.clear();
             std::vector<unsigned char> png;
-            lodepng::encode(png, pixels, cam.ImageResolution.X, cam.ImageResolution.Y);
+            lodepng::encode(png, pixels, cam.ImageResolution.x(), cam.ImageResolution.y());
             lodepng::save_file(png, cam.ImageName);
         }            
     }

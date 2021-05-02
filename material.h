@@ -1,6 +1,9 @@
 #pragma once
-#include "vector.h"
+#include "Eigen/Dense"
 #include "pugixml.hpp"
+#include "vecfrom.h"
+
+using namespace Eigen;
 
 namespace raytracer
 {

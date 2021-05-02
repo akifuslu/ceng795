@@ -1,9 +1,13 @@
 #pragma once
+#include "Eigen/Dense"
 #include "material.h"
-#include "vector.h"
+#include "vecfrom.h"
 #include "pugixml.hpp"
 #include "ray.h"
 #include <vector>
+#include <iostream>
+
+using namespace Eigen;
 
 namespace raytracer
 {
