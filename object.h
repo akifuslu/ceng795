@@ -12,6 +12,7 @@ using namespace Eigen;
 namespace raytracer
 {
     class Object;
+    class Scene;
 
     class RayHit
     {
@@ -23,35 +24,38 @@ namespace raytracer
             Vector3f Normal;
     };
     
+    class AABB
+    {
+        public:
+            AABB(){}
+            AABB(const AABB& c)
+            {
+                Bounds[0] = c.Bounds[0];
+                Bounds[1] = c.Bounds[1];
+                Center = c.Center;
+            }
+            Vector3f Bounds[2];
+            Vector3f Center;
+            bool Intersect(const Ray& ray);
+            void ApplyTransform(const Transform<float, 3, 0>& transform);
+    };
+
     class IHittable
     {
         public:
             virtual bool Hit(const Ray& ray, RayHit& hit) {return false;}
-            Vector3f Center;
-            Vector3f Bounds[2];
-            virtual void Print()
-            {
-                std::cout << Bounds[0] << std::endl;
-                std::cout << Bounds[1] << std::endl;
-            }
+            AABB aabb;
     };
 
-    class AABB : public IHittable
+    class BVH : public IHittable
     {
         public:
-            AABB(){}
-            AABB(IHittable** hs, int count);
-            AABB(IHittable* right, IHittable* left);
+            BVH(){}
+            BVH(IHittable** hs, int count);
+            BVH(IHittable* right, IHittable* left);
             IHittable* Left;
             IHittable* Right;
             virtual bool Hit(const Ray& ray, RayHit& hit) override;
-            virtual void Print() override
-            {
-                std::cout << Bounds[0] << std::endl;
-                std::cout << Bounds[1] << std::endl;
-                Left->Print();
-                Right->Print();
-            }
     };
 
     class Face : public IHittable
@@ -70,18 +74,17 @@ namespace raytracer
             Material* _material;
     };
 
-    class Object
+    class Object : public IHittable
     {
         public:
             Object(pugi::xml_node node);
             int MaterialId;
             friend std::ostream& operator<<(std::ostream& os, const Object& mesh);
             virtual std::ostream& Print(std::ostream& os) const;
-            virtual void Load(std::vector<Vector3f>& vertexData, std::vector<Material>& materials);
-            virtual std::vector<IHittable*> GetHittables() 
-            {
-                return std::vector<IHittable*>();
-            }
+            virtual void Load(const Scene& scene);
+            std::string Transformations;
+            Transform<float, 3, 0> LocalToWorld;
+            Transform<float, 3, 0> WorldToLocal;
         protected:
             Material _material;
     };
@@ -92,10 +95,12 @@ namespace raytracer
             Mesh(pugi::xml_node node);
             std::vector<Vector3i> Faces;
             virtual std::ostream& Print(std::ostream& os) const override;
-            virtual void Load(std::vector<Vector3f>& vertexData, std::vector<Material>& materials) override;
-            virtual std::vector<IHittable*> GetHittables() override;
+            virtual bool Hit(const Ray& ray, RayHit& hit) override;
+            virtual void Load(const Scene& scene) override;
+            BVH* bvh;
         private:
-            std::vector<Face> _faces;
+            Face** _faces;
+            int _fCount;
             bool _ply = false;
     };
 
@@ -105,13 +110,13 @@ namespace raytracer
             Triangle(pugi::xml_node node);
             Vector3i Indices;
             virtual std::ostream& Print(std::ostream& os) const override;            
-            virtual void Load(std::vector<Vector3f>& vertexData, std::vector<Material>& materials) override;
-            virtual std::vector<IHittable*> GetHittables() override;
+            virtual bool Hit(const Ray& ray, RayHit& hit) override;
+            virtual void Load(const Scene& scene) override;
         private:
             Face _face;            
     };
 
-    class Sphere : public Object, public IHittable
+    class Sphere : public Object
     {
         public:
             Sphere(pugi::xml_node node);
@@ -119,8 +124,7 @@ namespace raytracer
             float Radius;
             virtual std::ostream& Print(std::ostream& os) const override;
             virtual bool Hit(const Ray& ray, RayHit& hit) override;
-            virtual void Load(std::vector<Vector3f>& vertexData, std::vector<Material>& materials) override;
-            virtual std::vector<IHittable*> GetHittables() override;
+            virtual void Load(const Scene& scene) override;
         private:
             Vector3f _center;            
     };

@@ -16,7 +16,7 @@ namespace raytracer
         BackgroundColor =  Vec3fFrom(node.child("BackgroundColor"));
         ShadowRayEpsilon = node.child("ShadowRayEpsilon").text().as_float();
         if(ShadowRayEpsilon == 0)
-            ShadowRayEpsilon = 0;//.001f;
+            ShadowRayEpsilon = 0.001f;
         MaxRecursionDepth = node.child("MaxRecursionDepth").text().as_int();
         if(MaxRecursionDepth == 0)
             MaxRecursionDepth = 1;
@@ -62,26 +62,51 @@ namespace raytracer
                 Objects.push_back(new Sphere(object));
             }
         }
+        auto transformations = node.child("Transformations");
+        for(auto& transform: transformations.children())
+        {
+            if(std::strcmp("Translation", transform.name()) == 0)
+            {
+                Translations.push_back(TranslationFrom(transform));
+            }
+            else if(std::strcmp("Rotation", transform.name()) == 0)
+            {
+                Rotations.push_back(RotationFrom(transform));
+            }
+            else if(std::strcmp("Scaling", transform.name()) == 0)
+            {
+                Scalings.push_back(ScalingFrom(transform));
+            }
+        }
     }
 
     void Scene::Load()
     {
+        IHittable** hs = new IHittable*[Objects.size()];
         for (size_t i = 0; i < Objects.size(); i++)
         {
-            Objects[i]->Load(VertexData, Materials);
-            auto hs = Objects[i]->GetHittables();
-            Hittables.insert(Hittables.end(), hs.begin(), hs.end());
+            Objects[i]->Load(*this);
+            hs[i] = Objects[i];
         }
-        IHittable** hs = new IHittable*[Hittables.size()];
-        for(int i = 0; i < Hittables.size(); i++)
-            hs[i] = Hittables[i];
-        Root = new AABB(hs, Hittables.size());
+        Root = new BVH(hs, Objects.size());
     }
 
     bool Scene::RayCast(Ray& ray, RayHit& hit, float maxDist, bool closest)
     {
         auto ret = Root->Hit(ray, hit);
         ray.Dist = (hit.Point - ray.Origin).norm();
+        //bool ret = false;
+        //hit.T = maxDist;
+        //for(int i = 0; i < Objects.size(); i++)
+        //{
+        //    RayHit thit;            
+        //    thit.T = FLT_MAX;
+        //    if(Objects[i]->aabb->Hit(ray, thit) && thit.T < hit.T)
+        //    {
+        //        ret = true;
+        //        hit = thit;
+        //    }
+        //}
         return ret;
     }
 
@@ -139,6 +164,8 @@ namespace raytracer
                     Ray tray = Ray(hit.Point - normal * ShadowRayEpsilon, reftrac);
                     tray.N = n2;
                     Vector3f l0 = Trace(tray, cam, depth - 1) * ft;
+                    RayHit tmphit;
+                    RayCast(tray, tmphit, FLT_MAX, false);
                     l0.x() = l0.x() * std::exp(hit.Material.AbsorptionCoefficient.x() * tray.Dist * -1);
                     l0.y() = l0.y() * std::exp(hit.Material.AbsorptionCoefficient.y() * tray.Dist * -1);
                     l0.z() = l0.z() * std::exp(hit.Material.AbsorptionCoefficient.z() * tray.Dist * -1);
@@ -206,7 +233,7 @@ namespace raytracer
             std::vector<unsigned char> pixels;
             pixels.resize(cam.ImageResolution.x() * cam.ImageResolution.y() * 4);
             int size = cam.ImageResolution.x() * cam.ImageResolution.y();
-            int cores = std::thread::hardware_concurrency();
+            int cores = 1;//std::thread::hardware_concurrency();
             volatile std::atomic<int> count(0);
             std::vector<std::future<void>> futures;
             while(cores--)
