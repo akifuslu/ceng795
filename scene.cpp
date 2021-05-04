@@ -61,6 +61,10 @@ namespace raytracer
             {
                 Objects.push_back(new Sphere(object));
             }
+            else if(std::strcmp("MeshInstance", object.name()) == 0)
+            {
+                Objects.push_back(new MeshInstance(object));
+            }
         }
         auto transformations = node.child("Transformations");
         for(auto& transform: transformations.children())
@@ -166,9 +170,12 @@ namespace raytracer
                     Vector3f l0 = Trace(tray, cam, depth - 1) * ft;
                     RayHit tmphit;
                     RayCast(tray, tmphit, FLT_MAX, false);
-                    l0.x() = l0.x() * std::exp(hit.Material.AbsorptionCoefficient.x() * tray.Dist * -1);
-                    l0.y() = l0.y() * std::exp(hit.Material.AbsorptionCoefficient.y() * tray.Dist * -1);
-                    l0.z() = l0.z() * std::exp(hit.Material.AbsorptionCoefficient.z() * tray.Dist * -1);
+                    if(ray.N == 1)
+                    {
+                        l0.x() = l0.x() * std::exp(hit.Material.AbsorptionCoefficient.x() * tray.Dist * -1);
+                        l0.y() = l0.y() * std::exp(hit.Material.AbsorptionCoefficient.y() * tray.Dist * -1);
+                        l0.z() = l0.z() * std::exp(hit.Material.AbsorptionCoefficient.z() * tray.Dist * -1);
+                    }
                     color = color + l0;
                 }                
             }
@@ -233,7 +240,7 @@ namespace raytracer
             std::vector<unsigned char> pixels;
             pixels.resize(cam.ImageResolution.x() * cam.ImageResolution.y() * 4);
             int size = cam.ImageResolution.x() * cam.ImageResolution.y();
-            int cores = 1;//std::thread::hardware_concurrency();
+            int cores = std::thread::hardware_concurrency();
             volatile std::atomic<int> count(0);
             std::vector<std::future<void>> futures;
             while(cores--)
