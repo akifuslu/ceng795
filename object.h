@@ -37,7 +37,7 @@ namespace raytracer
             Vector3f Bounds[2];
             Vector3f Center;
             bool Intersect(const Ray& ray);
-            void ApplyTransform(const Transform<float, 3, 0>& transform);
+            void ApplyTransform(const Transform<float, 3, Affine>& transform);
     };
 
     class IHittable
@@ -78,13 +78,14 @@ namespace raytracer
     {
         public:
             Object(pugi::xml_node node);
+            int Id;
             int MaterialId;
             friend std::ostream& operator<<(std::ostream& os, const Object& mesh);
             virtual std::ostream& Print(std::ostream& os) const;
             virtual void Load(const Scene& scene);
             std::string Transformations;
-            Transform<float, 3, 0> LocalToWorld;
-            Transform<float, 3, 0> WorldToLocal;
+            Transform<float, 3, Affine> LocalToWorld;
+            Transform<float, 3, Affine> WorldToLocal;
         protected:
             Material _material;
     };
@@ -102,6 +103,17 @@ namespace raytracer
             Face** _faces;
             int _fCount;
             bool _ply = false;
+    };
+
+    class MeshInstance : public Object
+    {
+        public:
+            MeshInstance(pugi::xml_node node);
+            int BaseMeshId;
+            bool ResetTransform;
+            virtual bool Hit(const Ray& ray, RayHit& hit) override;
+            virtual void Load(const Scene& scene) override;
+            BVH* bvh;            
     };
 
     class Triangle : public Object

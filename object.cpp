@@ -11,6 +11,7 @@ namespace raytracer
 
     Object::Object(pugi::xml_node node)
     {
+        Id = node.attribute("id").as_int();
         MaterialId = node.child("Material").text().as_int();
         Transformations = node.child("Transformations").text().as_string();        
     }
@@ -28,7 +29,7 @@ namespace raytracer
     void Object::Load(const Scene& scene)
     {
         _material = scene.Materials[MaterialId - 1];
-        LocalToWorld = Transform<float, 3, 0>::Identity();
+        LocalToWorld = Transform<float, 3, Affine>::Identity();
         std::stringstream ss;
         ss << Transformations;
         char type;
@@ -285,7 +286,7 @@ namespace raytracer
         if (v < 0 || u + v > 1)
             return false;
         float t = V0V2.dot(qvec) * invDet;
-        if(t < 1e-9)
+        if(t < 1e-2)
         {
             return false;
         }
@@ -418,7 +419,7 @@ namespace raytracer
         return true;
     }
 
-    void AABB::ApplyTransform(const Transform<float, 3, 0>& transform)
+    void AABB::ApplyTransform(const Transform<float, 3, Affine>& transform)
     {
         float xdiff = Bounds[1].x() - Bounds[0].x();
         float ydiff = Bounds[1].y() - Bounds[0].y();
@@ -474,4 +475,45 @@ namespace raytracer
         return lh || rh;
     }
 
+    MeshInstance::MeshInstance(pugi::xml_node node) : Object(node)
+    {   
+        BaseMeshId = node.attribute("baseMeshId").as_int();
+        ResetTransform = node.attribute("resetTransform").as_bool();
+    }
+
+    void MeshInstance::Load(const Scene& scene)
+    {
+        Object::Load(scene);
+        for(int i = 0; i < scene.Objects.size(); i++)
+        {
+            if(scene.Objects[i]->Id == BaseMeshId)
+            {
+                bvh = ((Mesh*)scene.Objects[i])->bvh;
+                if(!ResetTransform)
+                {
+                    auto& bt = scene.Objects[i]->LocalToWorld;
+                    LocalToWorld = LocalToWorld * bt;
+                    WorldToLocal = LocalToWorld.inverse();
+                }
+                break;
+            }
+        }
+        aabb = AABB(bvh->aabb);
+        aabb.ApplyTransform(LocalToWorld);        
+    }
+
+    bool MeshInstance::Hit(const Ray& wray, RayHit& hit)
+    {
+        if(!aabb.Intersect(wray))
+        {
+            return false;
+        }
+        Ray ray(WorldToLocal * wray.Origin, WorldToLocal.linear() * wray.Direction);
+        bool ret = bvh->Hit(ray, hit);
+        hit.Point = LocalToWorld * hit.Point;
+        hit.Normal = (LocalToWorld.linear().inverse().transpose() * hit.Normal).normalized();
+        hit.Object = this;
+        hit.Material = _material;
+        return ret;
+    }
 }
