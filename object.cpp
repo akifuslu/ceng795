@@ -134,11 +134,18 @@ namespace raytracer
         {
             return false;
         }
-        Ray ray(WorldToLocal * wray.Origin, WorldToLocal.linear() * wray.Direction);
+        Ray ray(WorldToLocal * wray.Origin, (WorldToLocal.linear() * wray.Direction).normalized());
         bool ret = bvh->Hit(ray, hit);
         hit.Point = LocalToWorld * hit.Point;
         hit.Normal = (LocalToWorld.linear().inverse().transpose() * hit.Normal).normalized();
         hit.Object = this;
+        if(ret){
+            hit.T = (hit.Point - wray.Origin).norm();
+        }
+        else
+        {
+            hit.T = FLT_MAX;
+        }        
         return ret;
     }
 
@@ -213,7 +220,7 @@ namespace raytracer
     
     bool Sphere::Hit(const Ray& wray, RayHit& hit)
     {
-        Ray ray(WorldToLocal * wray.Origin, WorldToLocal.linear() * wray.Direction);
+        Ray ray(WorldToLocal * wray.Origin, (WorldToLocal.linear() * wray.Direction).normalized());
         hit.T = FLT_MAX;
         Vector3f oc = ray.Origin - _center;
         float a = ray.Direction.dot(ray.Direction);
@@ -242,6 +249,7 @@ namespace raytracer
             hit.Point = LocalToWorld * hit.Point;
             hit.Normal = (LocalToWorld.linear().inverse().transpose() * hit.Normal).normalized();
             hit.Material = _material;
+            hit.T = (hit.Point - wray.Origin).norm();
             return true;
         }
     }
@@ -508,12 +516,19 @@ namespace raytracer
         {
             return false;
         }
-        Ray ray(WorldToLocal * wray.Origin, WorldToLocal.linear() * wray.Direction);
+        Ray ray(WorldToLocal * wray.Origin, (WorldToLocal.linear() * wray.Direction).normalized());
         bool ret = bvh->Hit(ray, hit);
         hit.Point = LocalToWorld * hit.Point;
         hit.Normal = (LocalToWorld.linear().inverse().transpose() * hit.Normal).normalized();
         hit.Object = this;
         hit.Material = _material;
+        if(ret){
+            hit.T = (hit.Point - wray.Origin).norm();
+        }
+        else
+        {
+            hit.T = FLT_MAX;
+        }        
         return ret;
     }
 }
