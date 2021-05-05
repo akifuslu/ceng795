@@ -4,6 +4,9 @@
 #include "pugixml.hpp"
 #include <string>
 #include "vecfrom.h"
+#include <vector>
+#include <random>
+
 
 using namespace Eigen;
 
@@ -13,7 +16,7 @@ namespace raytracer
     {
         public:
             Camera(pugi::xml_node node);
-            Ray GetRay(int x, int y);
+            std::vector<Ray> GetRay(int x, int y);
             Vector3f Position;
             Vector3f Gaze;
             Vector3f GazePoint;
@@ -23,10 +26,16 @@ namespace raytracer
             float NearDistance;
             Vector2i ImageResolution;
             std::string ImageName;
+            int NumSamples;
             friend std::ostream& operator<<(std::ostream& os, const Camera& cam);
         private:
+            std::default_random_engine generator;
+            std::uniform_real_distribution<float> rnd;
             Vector3f img_center;
             Vector3f u, v, w;
+            float suv, svv;
             Vector3f q;
+            int row;
+            int col;
     };
 }

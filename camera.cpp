@@ -15,6 +15,9 @@ namespace raytracer
         ImageName = node.child("ImageName").text().as_string();
         GazePoint = Vec3fFrom(node.child("GazePoint"));
         FovY = node.child("FovY").text().as_float();
+        NumSamples = node.child("NumSamples").text().as_int();
+        row = std::sqrt(NumSamples);
+        col = NumSamples / row;
         if(std::strcmp(node.attribute("type").as_string(), "lookAt") == 0)
         {
             Gaze = (GazePoint - Position);
@@ -34,14 +37,36 @@ namespace raytracer
         v = w.cross(u).normalized();
         img_center = Position - w * NearDistance;
         q = img_center + v * NearPlane.w() + u * NearPlane.x();
+        suv = ((NearPlane.y() - NearPlane.x()) / ImageResolution.x());
+        svv = ((NearPlane.w() - NearPlane.z()) / ImageResolution.y());
     }
 
-    Ray Camera::GetRay(int x, int y)
+    std::vector<Ray> Camera::GetRay(int x, int y)
     {
-        float su = (x + .5) * ((NearPlane.y() - NearPlane.x()) / ImageResolution.x());
-        float sv = (y + .5) * ((NearPlane.w() - NearPlane.z()) / ImageResolution.y());
-        Vector3f s = q + (u * su) - (v * sv);
-        return Ray(Position, (s - Position).normalized());
+        std::vector<Ray> samples;
+        if(NumSamples <= 1)
+        {
+            float su = (x + .5) * suv;
+            float sv = (y + .5) * svv;
+            Vector3f s = q + (u * su) - (v * sv);
+            samples.push_back(Ray(Position, (s - Position).normalized()));
+        }
+        else
+        {
+            for(int i = 0; i < row; i++)
+            {
+                for(int j = 0; j < col; j++)
+                {
+                    float rx = (j + rnd(generator)) / col;
+                    float ry = (i + rnd(generator)) / row;
+                    float su = (x + rx) * suv;
+                    float sv = (y + ry) * svv;
+                    Vector3f s = q + (u * su) - (v * sv);
+                    samples.push_back(Ray(Position, (s - Position).normalized()));
+                }
+            }
+        }      
+        return samples;
     }
 
     std::ostream& operator<<(std::ostream& os, const Camera& cam)

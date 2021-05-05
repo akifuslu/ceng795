@@ -240,7 +240,7 @@ namespace raytracer
             std::vector<unsigned char> pixels;
             pixels.resize(cam.ImageResolution.x() * cam.ImageResolution.y() * 4);
             int size = cam.ImageResolution.x() * cam.ImageResolution.y();
-            int cores = std::thread::hardware_concurrency();
+            int cores = 1;//std::thread::hardware_concurrency();
             volatile std::atomic<int> count(0);
             std::vector<std::future<void>> futures;
             while(cores--)
@@ -254,9 +254,14 @@ namespace raytracer
                             if(index >= size)
                                 break;
                             int x = index % cam.ImageResolution.x();
-                            int y = index / cam.ImageResolution.x();
-                            auto ray = cam.GetRay(x, y);
-                            auto cl = Trace(ray, cam, MaxRecursionDepth);
+                            int y = index / cam.ImageResolution.x();                            
+                            auto rays = cam.GetRay(x, y);
+                            Vector3f cl = Vector3f::Zero();
+                            for(int r = 0; r < rays.size(); r++)
+                            {
+                                cl += Trace(rays[r], cam, MaxRecursionDepth);
+                            }
+                            cl /= rays.size();
                             pixels[4 * index] = cl.x() > 255 ? 255 : cl.x();
                             pixels[4 * index + 1] = cl.y() > 255 ? 255 : cl.y();
                             pixels[4 * index + 2] = cl.z() > 255 ? 255 : cl.z();
