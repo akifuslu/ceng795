@@ -13,7 +13,15 @@ namespace raytracer
     {
         Id = node.attribute("id").as_int();
         MaterialId = node.child("Material").text().as_int();
-        Transformations = node.child("Transformations").text().as_string();        
+        Transformations = node.child("Transformations").text().as_string();    
+        if(node.child("MotionBlur"))
+        {
+            MotionBlur = Vec3fFrom(node.child("MotionBlur"));
+        }    
+        else
+        {
+            MotionBlur = Vector3f::Zero();
+        }        
     }
 
     std::ostream& Object::Print(std::ostream& os) const
@@ -77,14 +85,31 @@ namespace raytracer
             happly::PLYData plyIn(ply);
             std::vector<std::array<double, 3>> vPos = plyIn.getVertexPositions();
             std::vector<std::vector<size_t>> fInd = plyIn.getFaceIndices();            
-            _faces = new Face*[fInd.size()];
-            _fCount = fInd.size();
+            if(fInd[0].size() == 3)
+                _fCount = fInd.size();
+            else
+                _fCount = fInd.size() * 2;
+            
+            _faces = new Face*[_fCount];
+            int f = 0;
             for(int i = 0; i < fInd.size(); i++)
             {
-                auto v0 = new Vector3f(vPos[fInd[i][0]][0], vPos[fInd[i][0]][1], vPos[fInd[i][0]][2]);
-                auto v1 = new Vector3f(vPos[fInd[i][1]][0], vPos[fInd[i][1]][1], vPos[fInd[i][1]][2]);
-                auto v2 = new Vector3f(vPos[fInd[i][2]][0], vPos[fInd[i][2]][1], vPos[fInd[i][2]][2]);
-                _faces[i] = new Face(v0, v1, v2, &_material);
+                if(fInd[i].size() == 3)
+                {
+                    auto v0 = new Vector3f(vPos[fInd[i][0]][0], vPos[fInd[i][0]][1], vPos[fInd[i][0]][2]);
+                    auto v1 = new Vector3f(vPos[fInd[i][1]][0], vPos[fInd[i][1]][1], vPos[fInd[i][1]][2]);
+                    auto v2 = new Vector3f(vPos[fInd[i][2]][0], vPos[fInd[i][2]][1], vPos[fInd[i][2]][2]);
+                    _faces[f++] = new Face(v0, v1, v2, &_material);
+                }
+                else if(fInd[i].size() == 4)
+                {
+                    auto v0 = new Vector3f(vPos[fInd[i][0]][0], vPos[fInd[i][0]][1], vPos[fInd[i][0]][2]);
+                    auto v1 = new Vector3f(vPos[fInd[i][1]][0], vPos[fInd[i][1]][1], vPos[fInd[i][1]][2]);
+                    auto v2 = new Vector3f(vPos[fInd[i][2]][0], vPos[fInd[i][2]][1], vPos[fInd[i][2]][2]);
+                    auto v3 = new Vector3f(vPos[fInd[i][3]][0], vPos[fInd[i][3]][1], vPos[fInd[i][3]][2]);
+                    _faces[f++] = new Face(v0, v1, v2, &_material);
+                    _faces[f++] = new Face(v0, v2, v3, &_material);
+                }
             }
         }
         
@@ -125,7 +150,12 @@ namespace raytracer
         }
         bvh = new BVH((IHittable**)_faces, _fCount);
         aabb = AABB(bvh->aabb);
-        aabb.ApplyTransform(LocalToWorld);
+        auto ltw = LocalToWorld;
+        float sx = MotionBlur.x() == 0 ? 1 : MotionBlur.x();
+        float sy = MotionBlur.y() == 0 ? 1 : MotionBlur.y();
+        float sz = MotionBlur.z() == 0 ? 1 : MotionBlur.z();        
+        ltw.scale(Vector3f(sx, sy, sz));
+        aabb.ApplyTransform(ltw);        
     }   
 
     bool Mesh::Hit(const Ray& wray, RayHit& hit)
@@ -134,11 +164,16 @@ namespace raytracer
         {
             return false;
         }
-        Ray ray(WorldToLocal * wray.Origin, (WorldToLocal.linear() * wray.Direction).normalized());
+        auto wtl = WorldToLocal;
+        wtl.translate(MotionBlur * -wray.Time); 
+        Ray ray(wtl * wray.Origin, (wtl.linear() * wray.Direction).normalized());
         bool ret = bvh->Hit(ray, hit);
-        hit.Point = LocalToWorld * hit.Point;
-        hit.Normal = (LocalToWorld.linear().inverse().transpose() * hit.Normal).normalized();
+        auto ltw = LocalToWorld;
+        ltw.pretranslate(MotionBlur * wray.Time);
+        hit.Point = ltw * hit.Point;
+        hit.Normal = (ltw.linear().inverse().transpose() * hit.Normal).normalized();
         hit.Object = this;
+        hit.Material = _material;
         if(ret){
             hit.T = (hit.Point - wray.Origin).norm();
         }
@@ -278,7 +313,7 @@ namespace raytracer
         hit.T = FLT_MAX;
         Vector3f pvec = ray.Direction.cross(V0V2);
         float det = V0V1.dot(pvec);
-        if (std::fabs(det) < 0.000001f)
+        if (std::fabs(det) < 1e-9)
         {            
             return false;
         }
@@ -507,7 +542,12 @@ namespace raytracer
             }
         }
         aabb = AABB(bvh->aabb);
-        aabb.ApplyTransform(LocalToWorld);        
+        auto ltw = LocalToWorld;
+        float sx = MotionBlur.x() == 0 ? 1 : MotionBlur.x();
+        float sy = MotionBlur.y() == 0 ? 1 : MotionBlur.y();
+        float sz = MotionBlur.z() == 0 ? 1 : MotionBlur.z();        
+        ltw.scale(Vector3f(sx, sy, sz));
+        aabb.ApplyTransform(ltw);       
     }
 
     bool MeshInstance::Hit(const Ray& wray, RayHit& hit)
@@ -516,10 +556,14 @@ namespace raytracer
         {
             return false;
         }
-        Ray ray(WorldToLocal * wray.Origin, (WorldToLocal.linear() * wray.Direction).normalized());
+        auto wtl = WorldToLocal;
+        wtl.translate(MotionBlur * -wray.Time); 
+        Ray ray(wtl * wray.Origin, (wtl.linear() * wray.Direction).normalized());
         bool ret = bvh->Hit(ray, hit);
-        hit.Point = LocalToWorld * hit.Point;
-        hit.Normal = (LocalToWorld.linear().inverse().transpose() * hit.Normal).normalized();
+        auto ltw = LocalToWorld;
+        ltw.pretranslate(MotionBlur * wray.Time);
+        hit.Point = ltw * hit.Point;
+        hit.Normal = (ltw.linear().inverse().transpose() * hit.Normal).normalized();
         hit.Object = this;
         hit.Material = _material;
         if(ret){

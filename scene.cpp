@@ -128,7 +128,7 @@ namespace raytracer
                 vo.normalize();
                 Vector3f reflect = vo - hit.Normal * 2 * hit.Normal.dot(vo);
                 reflect.normalize();
-                ray = Ray(hit.Point, reflect);
+                ray = Ray(hit.Point, reflect, ray.Time);
                 auto cl = Trace(ray, cam, depth - 1);
                 color = color + hit.Material.MirrorReflectance.cwiseProduct(cl);
             }
@@ -150,7 +150,7 @@ namespace raytracer
                 float cphi2 = 1 - (n1/n2)*(n1/n2)*(1 - ctheta*ctheta);
                 if(cphi2 < 0) // no reftrac
                 {
-                    Ray rray = Ray(hit.Point + normal * ShadowRayEpsilon, reflect);
+                    Ray rray = Ray(hit.Point + normal * ShadowRayEpsilon, reflect, ray.Time);
                     rray.N = ray.N;
                     color = color + Trace(rray, cam, depth - 1);
                 }
@@ -162,10 +162,10 @@ namespace raytracer
                     float r2 = (n1 * ctheta - n2 * cphi) / (n1 * ctheta + n2 * cphi);   
                     float fr = (r1*r1 + r2*r2) / 2;
                     float ft = 1 - fr;
-                    Ray rray = Ray(hit.Point + normal * ShadowRayEpsilon, reflect);
+                    Ray rray = Ray(hit.Point + normal * ShadowRayEpsilon, reflect, ray.Time);
                     rray.N = ray.N;
                     color = color + Trace(rray, cam, depth - 1) * fr;
-                    Ray tray = Ray(hit.Point - normal * ShadowRayEpsilon, reftrac);
+                    Ray tray = Ray(hit.Point - normal * ShadowRayEpsilon, reftrac, ray.Time);
                     tray.N = n2;
                     Vector3f l0 = Trace(tray, cam, depth - 1) * ft;
                     RayHit tmphit;
@@ -191,7 +191,7 @@ namespace raytracer
                 float rs = ((n*n + k*k) - 2 * n * ndi + ndi * ndi) / ((n*n + k*k) + 2 * n * ndi + ndi * ndi);
                 float rp = ((n*n + k*k) * ndi*ndi - 2*n*ndi + 1) / ((n*n + k*k) * ndi*ndi + 2*n*ndi + 1);
                 float fr = (rs + rp) / 2;
-                Ray rray = Ray(hit.Point + hit.Normal * ShadowRayEpsilon, reflect);
+                Ray rray = Ray(hit.Point + hit.Normal * ShadowRayEpsilon, reflect, ray.Time);
                 auto cl = Trace(rray, cam, depth - 1);
                 color = color + hit.Material.MirrorReflectance.cwiseProduct(cl) * fr;
             }
@@ -208,7 +208,7 @@ namespace raytracer
                 Vector3f wi = (light.Position - hit.Point).normalized();
                 Vector3f sp = hit.Point + hit.Normal * ShadowRayEpsilon;
                 float r = (light.Position - hit.Point).norm();
-                Ray sRay = Ray(sp, wi);
+                Ray sRay = Ray(sp, wi, ray.Time);                
                 RayHit sHit;
                 bool sf = RayCast(sRay, sHit, r, false);
                 if(sf && sHit.T < r)
@@ -240,7 +240,7 @@ namespace raytracer
             std::vector<unsigned char> pixels;
             pixels.resize(cam.ImageResolution.x() * cam.ImageResolution.y() * 4);
             int size = cam.ImageResolution.x() * cam.ImageResolution.y();
-            int cores = 1;//std::thread::hardware_concurrency();
+            int cores = std::thread::hardware_concurrency();
             volatile std::atomic<int> count(0);
             std::vector<std::future<void>> futures;
             while(cores--)

@@ -1,4 +1,5 @@
 #include "material.h"
+#include <iostream>
 
 namespace raytracer
 {

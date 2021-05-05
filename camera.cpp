@@ -15,7 +15,7 @@ namespace raytracer
         ImageName = node.child("ImageName").text().as_string();
         GazePoint = Vec3fFrom(node.child("GazePoint"));
         FovY = node.child("FovY").text().as_float();
-        NumSamples = node.child("NumSamples").text().as_int();
+        NumSamples = node.child("NumSamples").text().as_int(1);
         row = std::sqrt(NumSamples);
         col = NumSamples / row;
         if(std::strcmp(node.attribute("type").as_string(), "lookAt") == 0)
@@ -62,7 +62,8 @@ namespace raytracer
                     float su = (x + rx) * suv;
                     float sv = (y + ry) * svv;
                     Vector3f s = q + (u * su) - (v * sv);
-                    samples.push_back(Ray(Position, (s - Position).normalized()));
+                    float t = rnd(generator);
+                    samples.push_back(Ray(Position, (s - Position).normalized(), t));
                 }
             }
         }      

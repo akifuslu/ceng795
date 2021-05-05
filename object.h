@@ -38,6 +38,17 @@ namespace raytracer
             Vector3f Center;
             bool Intersect(const Ray& ray);
             void ApplyTransform(const Transform<float, 3, Affine>& transform);
+            void Extend(Vector3f offset)
+            {
+                Vector3f b0 = Bounds[0] + offset;
+                Vector3f b1 = Bounds[1] + offset;
+                Bounds[0].x() = std::min(Bounds[0].x(), b0.x());
+                Bounds[0].y() = std::min(Bounds[0].y(), b0.y());
+                Bounds[0].z() = std::min(Bounds[0].z(), b0.z());
+                Bounds[1].x() = std::min(Bounds[1].x(), b1.x());
+                Bounds[1].y() = std::min(Bounds[1].y(), b1.y());
+                Bounds[1].z() = std::min(Bounds[1].z(), b1.z());
+            }
     };
 
     class IHittable
@@ -86,6 +97,7 @@ namespace raytracer
             std::string Transformations;
             Transform<float, 3, Affine> LocalToWorld;
             Transform<float, 3, Affine> WorldToLocal;
+            Vector3f MotionBlur;
         protected:
             Material _material;
     };

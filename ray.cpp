@@ -12,4 +12,10 @@ namespace raytracer
         Sign[2] = (Direction.z() > 0 ? 0 : 1);
         N = 1;
     }
+
+    Ray::Ray(Vector3f origin, Vector3f direction, float time) : Ray(origin, direction)
+    {
+        Time = time;
+    }
+
 }
