@@ -16,6 +16,7 @@ namespace raytracer
         RefractionIndex = node.child("RefractionIndex").text().as_float();
         AbsorptionIndex = node.child("AbsorptionIndex").text().as_float();
         AbsorptionCoefficient = Vec3fFrom(node.child("AbsorptionCoefficient"));
+        Roughness = node.child("Roughness").text().as_float();
         if(std::strcmp(node.attribute("type").as_string(), "conductor") == 0)
         {
             Type = 1;            

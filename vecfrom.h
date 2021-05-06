@@ -3,6 +3,8 @@
 #include "Eigen/Geometry"
 #include "pugixml.hpp"
 #include <sstream>
+#include <random>
+#include <iostream>
 
 using namespace Eigen;
 
@@ -64,6 +66,36 @@ namespace raytracer
         std::stringstream stream(node.first_child().value());
         stream >> x >> y >> z;
         return AlignedScaling3f(x, y, z);
+    }
+
+    static std::default_random_engine gen;
+    static std::uniform_real_distribution<float> rand;
+
+    static Vector3f Reflect(Vector3f in, Vector3f norm, float roughness)
+    {
+        in.normalize();
+        norm.normalize();
+        Vector3f reflect = in - norm * 2 * norm.dot(in);
+        reflect.normalize();
+        if(roughness != 0)
+        {
+            Vector3f n(1.0f, 0.0f, 0.0f);
+            Vector3f m(0.0f, 1.0f, 0.0f);
+            Vector3f u = reflect.cross(n);
+            if(u.norm() < .01f)
+                u = reflect.cross(m);
+            u.normalize();
+            Vector3f v = reflect.cross(u);
+            v.normalize();
+            if(u.dot(v) > 0.01f || reflect.dot(u) > 0.01f)
+            {
+                std::cout << "sex";
+            }
+            float e1 = rand(gen);
+            float e2 = rand(gen);
+            reflect = (reflect + roughness * (e1 * u + e2 * v)).normalized();
+        }
+        return reflect;
     }
 
 }

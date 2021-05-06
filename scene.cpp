@@ -124,11 +124,8 @@ namespace raytracer
         {
             if(hit.Material.Type == 3)
             {
-                auto vo = ray.Direction;
-                vo.normalize();
-                Vector3f reflect = vo - hit.Normal * 2 * hit.Normal.dot(vo);
-                reflect.normalize();
-                ray = Ray(hit.Point, reflect, ray.Time);
+                Vector3f reflect = Reflect(ray.Direction, hit.Normal, hit.Material.Roughness);
+                ray = Ray(hit.Point + hit.Normal * ShadowRayEpsilon, reflect, ray.Time);
                 auto cl = Trace(ray, cam, depth - 1);
                 color = color + hit.Material.MirrorReflectance.cwiseProduct(cl);
             }
@@ -143,10 +140,7 @@ namespace raytracer
                     ctheta *= -1;
                     normal = normal * -1;
                 }
-                auto vo = ray.Direction;
-                vo.normalize();
-                Vector3f reflect = vo - normal * 2 * normal.dot(vo);
-                reflect.normalize();
+                Vector3f reflect = Reflect(ray.Direction, normal, hit.Material.Roughness);
                 float cphi2 = 1 - (n1/n2)*(n1/n2)*(1 - ctheta*ctheta);
                 if(cphi2 < 0) // no reftrac
                 {
@@ -181,10 +175,7 @@ namespace raytracer
             }
             else if(hit.Material.Type == 1)
             {
-                auto vo = ray.Direction;
-                vo.normalize();
-                Vector3f reflect = vo - hit.Normal * 2 * hit.Normal.dot(vo);
-                reflect.normalize();
+                Vector3f reflect = Reflect(ray.Direction, hit.Normal, hit.Material.Roughness);
                 float ndi = -hit.Normal.dot(ray.Direction);
                 float n = hit.Material.RefractionIndex;
                 float k = hit.Material.AbsorptionIndex;
@@ -241,6 +232,8 @@ namespace raytracer
             pixels.resize(cam.ImageResolution.x() * cam.ImageResolution.y() * 4);
             int size = cam.ImageResolution.x() * cam.ImageResolution.y();
             int cores = std::thread::hardware_concurrency();
+            if(numThreads == 1)
+                cores = 1;
             volatile std::atomic<int> count(0);
             std::vector<std::future<void>> futures;
             while(cores--)
