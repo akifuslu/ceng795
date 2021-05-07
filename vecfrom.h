@@ -69,7 +69,7 @@ namespace raytracer
     }
 
     static std::default_random_engine gen;
-    static std::uniform_real_distribution<float> rand;
+    static std::uniform_real_distribution<float> rand(-.5f,0.5f);
 
     static Vector3f Reflect(Vector3f in, Vector3f norm, float roughness)
     {
@@ -79,18 +79,19 @@ namespace raytracer
         reflect.normalize();
         if(roughness != 0)
         {
-            Vector3f n(1.0f, 0.0f, 0.0f);
-            Vector3f m(0.0f, 1.0f, 0.0f);
-            Vector3f u = reflect.cross(n);
-            if(u.norm() < .01f)
-                u = reflect.cross(m);
-            u.normalize();
-            Vector3f v = reflect.cross(u);
-            v.normalize();
-            if(u.dot(v) > 0.01f || reflect.dot(u) > 0.01f)
-            {
-                std::cout << "sex";
-            }
+            Vector3f rp;
+            float x = std::fabs(reflect.x());
+            float y = std::fabs(reflect.y()); 
+            float z = std::fabs(reflect.z()); 
+            if(x <= y && x <= z)
+                rp = Vector3f(1, reflect.y(), reflect.z());
+            else if(y <= x && y <= z)
+                rp = Vector3f(reflect.x(), 1, reflect.z());
+            else
+                rp = Vector3f(reflect.x(), reflect.y(), 1);
+
+            Vector3f u = reflect.cross(rp).normalized();
+            Vector3f v = reflect.cross(u).normalized();                                  
             float e1 = rand(gen);
             float e2 = rand(gen);
             reflect = (reflect + roughness * (e1 * u + e2 * v)).normalized();
