@@ -16,6 +16,12 @@ namespace raytracer
         GazePoint = Vec3fFrom(node.child("GazePoint"));
         FovY = node.child("FovY").text().as_float();
         NumSamples = node.child("NumSamples").text().as_int(1);
+        if(node.child("FocusDistance").text().as_float())
+        {
+            FocusDistance = node.child("FocusDistance").text().as_float();
+            ApertureSize = node.child("ApertureSize").text().as_float();
+            FocusEnabled = true;
+        }
         row = std::sqrt(NumSamples);
         col = NumSamples / row;
         if(std::strcmp(node.attribute("type").as_string(), "lookAt") == 0)
@@ -36,7 +42,7 @@ namespace raytracer
         u = Up.cross(w).normalized();
         v = w.cross(u).normalized();
         img_center = Position - w * NearDistance;
-        q = img_center + v * NearPlane.w() + u * NearPlane.x();
+        lu = img_center + v * NearPlane.w() + u * NearPlane.x();
         suv = ((NearPlane.y() - NearPlane.x()) / ImageResolution.x());
         svv = ((NearPlane.w() - NearPlane.z()) / ImageResolution.y());
     }
@@ -48,7 +54,7 @@ namespace raytracer
         {
             float su = (x + .5) * suv;
             float sv = (y + .5) * svv;
-            Vector3f s = q + (u * su) - (v * sv);
+            Vector3f s = lu + (u * su) - (v * sv);
             samples.push_back(Ray(Position, (s - Position).normalized()));
         }
         else
@@ -61,9 +67,23 @@ namespace raytracer
                     float ry = (i + rnd(generator)) / row;
                     float su = (x + rx) * suv;
                     float sv = (y + ry) * svv;
-                    Vector3f s = q + (u * su) - (v * sv);
+                    Vector3f q = lu + (u * su) - (v * sv);
                     float t = rnd(generator);
-                    samples.push_back(Ray(Position, (s - Position).normalized(), t));
+                    if(!FocusEnabled)
+                    {
+                        samples.push_back(Ray(Position, (q - Position).normalized(), t));
+                    }
+                    else
+                    {
+                        Vector3f dir = (q - Position).normalized();
+                        float tfd = FocusDistance / dir.dot(-w);
+                        Vector3f p = Position + dir * tfd;
+                        float rsu = (rnd(generator) - .5f) * ApertureSize;
+                        float rsv = (rnd(generator) - .5f) * ApertureSize;
+                        Vector3f s = Position + rsu * u + rsv * v;
+                        dir = (p - s).normalized();
+                        samples.push_back(Ray(s, dir, t));
+                    }                    
                 }
             }
         }      

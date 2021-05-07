@@ -27,6 +27,9 @@ namespace raytracer
             Vector2i ImageResolution;
             std::string ImageName;
             int NumSamples;
+            float FocusDistance;
+            float ApertureSize;
+            bool FocusEnabled = false;
             friend std::ostream& operator<<(std::ostream& os, const Camera& cam);
         private:
             std::default_random_engine generator;
@@ -34,7 +37,7 @@ namespace raytracer
             Vector3f img_center;
             Vector3f u, v, w;
             float suv, svv;
-            Vector3f q;
+            Vector3f lu;
             int row;
             int col;
     };
