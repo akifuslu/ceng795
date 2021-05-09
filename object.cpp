@@ -250,12 +250,19 @@ namespace raytracer
         aabb.Bounds[1].y() = _center.y() + Radius;
         aabb.Bounds[1].z() = _center.z() + Radius;
         aabb.Center = (aabb.Bounds[0] + aabb.Bounds[1]) / 2; 
-        aabb.ApplyTransform(LocalToWorld);
+        auto ltw = LocalToWorld;
+        float sx = MotionBlur.x() == 0 ? 1 : MotionBlur.x();
+        float sy = MotionBlur.y() == 0 ? 1 : MotionBlur.y();
+        float sz = MotionBlur.z() == 0 ? 1 : MotionBlur.z();        
+        ltw.scale(Vector3f(sx, sy, sz));
+        aabb.ApplyTransform(ltw);        
     }   
     
     bool Sphere::Hit(const Ray& wray, RayHit& hit)
     {
-        Ray ray(WorldToLocal * wray.Origin, (WorldToLocal.linear() * wray.Direction).normalized());
+        auto wtl = WorldToLocal;
+        wtl.translate(MotionBlur * -wray.Time); 
+        Ray ray(wtl * wray.Origin, (wtl.linear() * wray.Direction).normalized());
         hit.T = FLT_MAX;
         Vector3f oc = ray.Origin - _center;
         float a = ray.Direction.dot(ray.Direction);
@@ -281,10 +288,12 @@ namespace raytracer
             hit.Point = ray.Origin + ray.Direction * hit.T;
             hit.Normal = (hit.Point - _center).normalized();
 
-            hit.Point = LocalToWorld * hit.Point;
-            hit.Normal = (LocalToWorld.linear().inverse().transpose() * hit.Normal).normalized();
+            auto ltw = LocalToWorld;
+            ltw.pretranslate(MotionBlur * wray.Time);
+            hit.Point = ltw * hit.Point;
+            hit.Normal = (ltw.linear().inverse().transpose() * hit.Normal).normalized();
+            hit.Object = this;
             hit.Material = _material;
-            hit.T = (hit.Point - wray.Origin).norm();
             return true;
         }
     }
@@ -487,6 +496,7 @@ namespace raytracer
                     Bounds[1](j) = corners[i](j);
             }
         }
+        Center = (Bounds[0] + Bounds[1]) / 2;
     }
 
 

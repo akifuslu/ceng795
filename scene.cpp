@@ -103,7 +103,7 @@ namespace raytracer
     bool Scene::RayCast(Ray& ray, RayHit& hit, float maxDist, bool closest)
     {
         auto ret = Root->Hit(ray, hit);
-        ray.Dist = (hit.Point - ray.Origin).norm();
+        ray.Dist = hit.T;
         //bool ret = false;
         //hit.T = maxDist;
         //for(int i = 0; i < Objects.size(); i++)
@@ -123,7 +123,7 @@ namespace raytracer
     {
         Vector3f color(0, 0, 0);
         RayHit hit;              
-        if(depth == 0)
+        if(depth < 0)
             return color;      
         if(RayCast(ray, hit, FLT_MAX, true))
         {
@@ -151,31 +151,52 @@ namespace raytracer
                 {
                     Ray rray = Ray(hit.Point + normal * ShadowRayEpsilon, reflect, ray.Time);
                     rray.N = ray.N;
-                    color = color + Trace(rray, cam, depth - 1);
+                    Vector3f l1 = Trace(rray, cam, depth - 1);
+                    RayHit rmphit;
+                    if(ray.N != 1)
+                    {
+                        RayCast(rray, rmphit, FLT_MAX, false);
+                        l1.x() = l1.x() * std::exp(hit.Material.AbsorptionCoefficient.x() * rmphit.T * -1);
+                        l1.y() = l1.y() * std::exp(hit.Material.AbsorptionCoefficient.y() * rmphit.T * -1);
+                        l1.z() = l1.z() * std::exp(hit.Material.AbsorptionCoefficient.z() * rmphit.T * -1);
+                    }
+                    color = color + l1;
                 }
                 else
                 {
                     float cphi = std::sqrt(cphi2);
                     Vector3f reftrac = (ray.Direction + normal * ctheta) * (n1/n2) - normal * cphi;
+                    reftrac.normalize();
                     float r1 = (n2 * ctheta - n1 * cphi) / (n2 * ctheta + n1 * cphi);
                     float r2 = (n1 * ctheta - n2 * cphi) / (n1 * ctheta + n2 * cphi);   
                     float fr = (r1*r1 + r2*r2) / 2;
                     float ft = 1 - fr;
                     Ray rray = Ray(hit.Point + normal * ShadowRayEpsilon, reflect, ray.Time);
                     rray.N = ray.N;
-                    color = color + Trace(rray, cam, depth - 1) * fr;
+                    Vector3f l1 = Trace(rray, cam, depth - 1) * fr;
                     Ray tray = Ray(hit.Point - normal * ShadowRayEpsilon, reftrac, ray.Time);
                     tray.N = n2;
                     Vector3f l0 = Trace(tray, cam, depth - 1) * ft;
-                    RayHit tmphit;
-                    RayCast(tray, tmphit, FLT_MAX, false);
+                    RayHit tmphit, rmphit;
                     if(ray.N == 1)
                     {
-                        l0.x() = l0.x() * std::exp(hit.Material.AbsorptionCoefficient.x() * tray.Dist * -1);
-                        l0.y() = l0.y() * std::exp(hit.Material.AbsorptionCoefficient.y() * tray.Dist * -1);
-                        l0.z() = l0.z() * std::exp(hit.Material.AbsorptionCoefficient.z() * tray.Dist * -1);
+                        // reftracing into dielectric
+                        // apply beer law for reftracted val
+                        RayCast(tray, tmphit, FLT_MAX, false);
+                        l0.x() = l0.x() * std::exp(hit.Material.AbsorptionCoefficient.x() * tmphit.T * -1);
+                        l0.y() = l0.y() * std::exp(hit.Material.AbsorptionCoefficient.y() * tmphit.T * -1);
+                        l0.z() = l0.z() * std::exp(hit.Material.AbsorptionCoefficient.z() * tmphit.T * -1);
                     }
-                    color = color + l0;
+                    else
+                    {
+                        // reftracting into vacuum
+                        // apply beer law for reflected val
+                        RayCast(rray, rmphit, FLT_MAX, false);
+                        l1.x() = l1.x() * std::exp(hit.Material.AbsorptionCoefficient.x() * rmphit.T * -1);
+                        l1.y() = l1.y() * std::exp(hit.Material.AbsorptionCoefficient.y() * rmphit.T * -1);
+                        l1.z() = l1.z() * std::exp(hit.Material.AbsorptionCoefficient.z() * rmphit.T * -1);
+                    }                    
+                    color = color + l0 + l1;
                 }                
             }
             else if(hit.Material.Type == 1)
@@ -227,8 +248,6 @@ namespace raytracer
         {
             color = BackgroundColor;
         }  
-        if(color.x() < 0)
-            color = Vector3f::Zero();
         return color;
     }
 
@@ -240,8 +259,6 @@ namespace raytracer
             pixels.resize(cam.ImageResolution.x() * cam.ImageResolution.y() * 4);
             int size = cam.ImageResolution.x() * cam.ImageResolution.y();
             int cores = std::thread::hardware_concurrency();
-            if(numThreads == 1)
-                cores = 1;
             volatile std::atomic<int> count(0);
             std::vector<std::future<void>> futures;
             while(cores--)
