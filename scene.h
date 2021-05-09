@@ -24,7 +24,7 @@ namespace raytracer
             int MaxRecursionDepth;
             std::vector<Camera> Cameras;
             AmbientLight ambientLight;
-            std::vector<PointLight> PointLights;
+            std::vector<Light*> Lights;
             std::vector<Material> Materials;
             std::vector<Vector3f> VertexData;
             std::vector<Object*> Objects;

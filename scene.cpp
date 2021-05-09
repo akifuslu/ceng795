@@ -31,8 +31,13 @@ namespace raytracer
         ambientLight = AmbientLight(lights.child("AmbientLight"));
         for(auto& light: lights.children("PointLight"))
         {
-            PointLights.push_back(PointLight(light));
+            Lights.push_back(new PointLight(light));
         }
+        for(auto& light: lights.children("AreaLight"))
+        {
+            Lights.push_back(new AreaLight(light));
+        }
+
         auto materials = node.child("Materials");
         for(auto& material: materials.children())
         {
@@ -192,13 +197,14 @@ namespace raytracer
 
             color = color + hit.Material.AmbientReflectance.cwiseProduct(ambientLight.Intensity);
 
-            for(int l = 0; l < PointLights.size(); l++)
+            for(int l = 0; l < Lights.size(); l++)
             {
-                auto light = PointLights[l];                            
-                // SHADOW CHECK
-                Vector3f wi = (light.Position - hit.Point).normalized();
+                auto light = Lights[l];                            
+                Vector3f lsample = light->SamplePoint();
+                // SHADOW CHECK                
+                Vector3f wi = (lsample - hit.Point).normalized();
                 Vector3f sp = hit.Point + hit.Normal * ShadowRayEpsilon;
-                float r = (light.Position - hit.Point).norm();
+                float r = (lsample - hit.Point).norm();
                 Ray sRay = Ray(sp, wi, ray.Time);                
                 RayHit sHit;
                 bool sf = RayCast(sRay, sHit, r, false);
@@ -207,20 +213,22 @@ namespace raytracer
                 // DIFFUSE
                 float teta = wi.dot(hit.Normal);
                 teta = teta < 0 ? 0 : teta;
-                color += hit.Material.DiffuseReflectance.cwiseProduct(light.Intensity) * teta / (r * r);                            
+                color += hit.Material.DiffuseReflectance.cwiseProduct(light->GetLuminance(hit.Point, lsample)) * teta;                            
                 // SPECULAR
                 Vector3f wo = (cam.Position - hit.Point).normalized();
                 Vector3f h = (wi + wo).normalized();
                 teta = h.dot(hit.Normal);
                 teta = teta < 0 ? 0 : teta;
                 teta = std::pow(teta, hit.Material.PhongExponent);
-                color += hit.Material.SpecularReflectance.cwiseProduct(light.Intensity) * teta / (r * r);
+                color += hit.Material.SpecularReflectance.cwiseProduct(light->GetLuminance(hit.Point, lsample)) * teta;
             }
         }
         else
         {
             color = BackgroundColor;
         }  
+        if(color.x() < 0)
+            color = Vector3f::Zero();
         return color;
     }
 
