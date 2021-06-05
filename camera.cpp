@@ -43,8 +43,8 @@ namespace raytracer
         v = w.cross(u).normalized();
         img_center = Position - w * NearDistance;
         lu = img_center + v * NearPlane.w() + u * NearPlane.x();
-        suv = ((NearPlane.y() - NearPlane.x()) / ImageResolution.x());
-        svv = ((NearPlane.w() - NearPlane.z()) / ImageResolution.y());
+        suv = ((NearPlane.y() - NearPlane.x()) / (float)ImageResolution.x());
+        svv = ((NearPlane.w() - NearPlane.z()) / (float)ImageResolution.y());
     }
 
     std::vector<Ray> Camera::GetRay(int x, int y)

@@ -6,6 +6,7 @@
 #include "ray.h"
 #include <vector>
 #include <iostream>
+#include "texture.h"
 
 using namespace Eigen;
 
@@ -22,6 +23,9 @@ namespace raytracer
             float T;
             Vector3f Point;
             Vector3f Normal;
+            DiffuseTexture* Texture;
+            float u, v;
+            Matrix<float, 3, 3> TBN;
     };
     
     class AABB
@@ -73,16 +77,21 @@ namespace raytracer
     {
         public:
             Face();
-            Face(Vector3f* v0, Vector3f* v1, Vector3f* v2, Material* material);
+            Face(Vector3f* v0, Vector3f* v1, Vector3f* v2, Material* material,
+                    Vector2f* uv0, Vector2f* uv1, Vector2f* uv2);
             Vector3f* V0;
             Vector3f* V1;
             Vector3f* V2;
+            Vector2f* UV0;
+            Vector2f* UV1;
+            Vector2f* UV2;
             Vector3f Normal;
             Vector3f V0V1;
             Vector3f V0V2;
             virtual bool Hit(const Ray& ray, RayHit& hit) override;
 //        private:
             Material* _material;
+            Matrix<float, 3, 3> TBN;
     };
 
     class Object : public IHittable
@@ -93,13 +102,17 @@ namespace raytracer
             int MaterialId;
             friend std::ostream& operator<<(std::ostream& os, const Object& mesh);
             virtual std::ostream& Print(std::ostream& os) const;
-            virtual void Load(const Scene& scene);
+            virtual void Load(Scene& scene);
             std::string Transformations;
             Transform<float, 3, Affine> LocalToWorld;
             Transform<float, 3, Affine> WorldToLocal;
             Vector3f MotionBlur;
+            DiffuseTexture* DiffuseMap = NULL;
+            NormalTexture* NormalMap = NULL;
+            BumpTexture* BumpMap = NULL; 
         protected:
             Material _material;
+            int _texIds[2];
     };
 
     class Mesh : public Object
@@ -109,7 +122,7 @@ namespace raytracer
             std::vector<Vector3i> Faces;
             virtual std::ostream& Print(std::ostream& os) const override;
             virtual bool Hit(const Ray& ray, RayHit& hit) override;
-            virtual void Load(const Scene& scene) override;
+            virtual void Load(Scene& scene) override;
             BVH* bvh;
         private:
             Face** _faces;
@@ -124,7 +137,7 @@ namespace raytracer
             int BaseMeshId;
             bool ResetTransform;
             virtual bool Hit(const Ray& ray, RayHit& hit) override;
-            virtual void Load(const Scene& scene) override;
+            virtual void Load(Scene& scene) override;
             BVH* bvh;            
     };
 
@@ -135,7 +148,7 @@ namespace raytracer
             Vector3i Indices;
             virtual std::ostream& Print(std::ostream& os) const override;            
             virtual bool Hit(const Ray& ray, RayHit& hit) override;
-            virtual void Load(const Scene& scene) override;
+            virtual void Load(Scene& scene) override;
         private:
             Face _face;            
     };
@@ -148,7 +161,7 @@ namespace raytracer
             float Radius;
             virtual std::ostream& Print(std::ostream& os) const override;
             virtual bool Hit(const Ray& ray, RayHit& hit) override;
-            virtual void Load(const Scene& scene) override;
+            virtual void Load(Scene& scene) override;
         private:
             Vector3f _center;            
     };

@@ -51,6 +51,14 @@ namespace raytracer
         {            
             VertexData.push_back(Vector3f(x, y, z));
         }
+        auto uvs = node.child("TexCoordData");
+        std::stringstream us;
+        us << uvs.text().as_string();
+        float u, v;
+        while(us >> u >> v)
+        {
+            UVData.push_back(Vector2f(u, v));
+        }
         auto objects = node.child("Objects");
         for(auto& object: objects.children())
         {
@@ -86,6 +94,33 @@ namespace raytracer
             {
                 Scalings.push_back(ScalingFrom(transform));
             }
+        }
+        auto images = node.child("Textures").child("Images");
+        for(auto& image: images.children())
+        {
+            ImageLocator::GetInstance().AddImage(new Image(image));
+        }
+        auto textures = node.child("Textures");
+        for(auto& texture: textures.children("TextureMap"))
+        {
+            auto type = std::string(texture.child("DecalMode").text().as_string());
+            int id = texture.attribute("id").as_int();
+            if(type.compare("replace_background") == 0)
+            {
+                BackTexture = new BackgroundTexture(texture);
+            }
+            else if(type.compare("replace_normal") == 0)
+            {
+                Textures[id] = new NormalTexture(texture);
+            }
+            else if(type.compare("bump_normal") == 0)
+            {
+                Textures[id] = new BumpTexture(texture);
+            }
+            else
+            {
+                Textures[id] = new DiffuseTexture(texture);
+            }            
         }
     }
 
@@ -216,6 +251,15 @@ namespace raytracer
             if(ray.N != 1)
                 return color;
 
+            SamplerData data;
+            data.point = hit.Point;
+            data.u = hit.u;
+            data.v = hit.v;
+            if(hit.Texture != nullptr && hit.Texture->Mode == DecalMode::REPLACE_ALL)
+            {
+                return hit.Texture->Color(data);
+            }
+
             color = color + hit.Material.AmbientReflectance.cwiseProduct(ambientLight.Intensity);
 
             for(int l = 0; l < Lights.size(); l++)
@@ -231,10 +275,23 @@ namespace raytracer
                 bool sf = RayCast(sRay, sHit, r, false);
                 if(sf && sHit.T < r)
                     continue;
+                
+                Vector3f kd = hit.Material.DiffuseReflectance;
+                if(hit.Texture != nullptr)
+                {
+                    if(hit.Texture->Mode == DecalMode::REPLACE_KD)
+                    {
+                        kd = hit.Texture->Color(data);
+                    }
+                    else if(hit.Texture->Mode == DecalMode::BLEND_KD)
+                    {
+                        kd = (kd + hit.Texture->Color(data)) / 2;
+                    }
+                }
                 // DIFFUSE
                 float teta = wi.dot(hit.Normal);
                 teta = teta < 0 ? 0 : teta;
-                color += hit.Material.DiffuseReflectance.cwiseProduct(light->GetLuminance(hit.Point, lsample)) * teta;                            
+                color += kd.cwiseProduct(light->GetLuminance(hit.Point, lsample)) * teta;                            
                 // SPECULAR
                 Vector3f wo = (cam.Position - hit.Point).normalized();
                 Vector3f h = (wi + wo).normalized();
@@ -258,7 +315,7 @@ namespace raytracer
             std::vector<unsigned char> pixels;
             pixels.resize(cam.ImageResolution.x() * cam.ImageResolution.y() * 4);
             int size = cam.ImageResolution.x() * cam.ImageResolution.y();
-            int cores = std::thread::hardware_concurrency();
+            int cores = 1;//std::thread::hardware_concurrency();
             volatile std::atomic<int> count(0);
             std::vector<std::future<void>> futures;
             while(cores--)

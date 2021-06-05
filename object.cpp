@@ -22,6 +22,13 @@ namespace raytracer
         {
             MotionBlur = Vector3f::Zero();
         }        
+        _texIds[0] = _texIds[1] = 0;
+        if(node.child("Textures"))
+        {
+            std::stringstream ss;
+            ss << node.child("Textures").text().as_string();
+            ss >> _texIds[0] >> _texIds[1];
+        }
     }
 
     std::ostream& Object::Print(std::ostream& os) const
@@ -34,7 +41,7 @@ namespace raytracer
         return obj.Print(os);
     }
 
-    void Object::Load(const Scene& scene)
+    void Object::Load(Scene& scene)
     {
         _material = scene.Materials[MaterialId - 1];
         LocalToWorld = Transform<float, 3, Affine>::Identity();
@@ -57,12 +64,33 @@ namespace raytracer
                 LocalToWorld = scene.Rotations[id - 1] * LocalToWorld;
             }            
         }
-        //std::cout << LocalToWorld(0,0) << ',' << LocalToWorld(0,1) << ',' << LocalToWorld(0,2) << ',' << LocalToWorld(0,3) << std::endl;
-        //std::cout << LocalToWorld(1,0) << ',' << LocalToWorld(1,1) << ',' << LocalToWorld(1,2) << ',' << LocalToWorld(1,3) << std::endl;
-        //std::cout << LocalToWorld(2,0) << ',' << LocalToWorld(2,1) << ',' << LocalToWorld(2,2) << ',' << LocalToWorld(2,3) << std::endl;
-        //std::cout << LocalToWorld(3,0) << ',' << LocalToWorld(3,1) << ',' << LocalToWorld(3,2) << ',' << LocalToWorld(3,3) << std::endl;
-        //std::cout << "------------" << std::endl;
         WorldToLocal = LocalToWorld.inverse(TransformTraits::Affine);
+        // map textures
+        for(int i = 0; i < 2; i++)
+        {
+            if(_texIds[i] != 0)
+            {
+                Texture* tex = scene.Textures[_texIds[i]];
+                auto diff = dynamic_cast<DiffuseTexture*>(tex);
+                if(diff != nullptr)
+                {
+                    DiffuseMap = diff;
+                    continue;
+                }
+                auto bump = dynamic_cast<BumpTexture*>(tex);
+                if(bump != nullptr)
+                {
+                    BumpMap = bump;
+                    continue;
+                }
+                auto normal = dynamic_cast<NormalTexture*>(tex);
+                if(normal != nullptr)
+                {
+                    NormalMap = normal;
+                    continue;
+                }
+            }
+        }
     }   
 
     Mesh::Mesh(pugi::xml_node node) : Object(node)
@@ -99,7 +127,7 @@ namespace raytracer
                     auto v0 = new Vector3f(vPos[fInd[i][0]][0], vPos[fInd[i][0]][1], vPos[fInd[i][0]][2]);
                     auto v1 = new Vector3f(vPos[fInd[i][1]][0], vPos[fInd[i][1]][1], vPos[fInd[i][1]][2]);
                     auto v2 = new Vector3f(vPos[fInd[i][2]][0], vPos[fInd[i][2]][1], vPos[fInd[i][2]][2]);
-                    _faces[f++] = new Face(v0, v1, v2, &_material);
+                    _faces[f++] = new Face(v0, v1, v2, &_material, 0, 0, 0);
                 }
                 else if(fInd[i].size() == 4)
                 {
@@ -107,8 +135,8 @@ namespace raytracer
                     auto v1 = new Vector3f(vPos[fInd[i][1]][0], vPos[fInd[i][1]][1], vPos[fInd[i][1]][2]);
                     auto v2 = new Vector3f(vPos[fInd[i][2]][0], vPos[fInd[i][2]][1], vPos[fInd[i][2]][2]);
                     auto v3 = new Vector3f(vPos[fInd[i][3]][0], vPos[fInd[i][3]][1], vPos[fInd[i][3]][2]);
-                    _faces[f++] = new Face(v0, v1, v2, &_material);
-                    _faces[f++] = new Face(v0, v2, v3, &_material);
+                    _faces[f++] = new Face(v0, v1, v2, &_material, 0, 0, 0);
+                    _faces[f++] = new Face(v0, v2, v3, &_material, 0, 0, 0);
                 }
             }
         }
@@ -126,7 +154,7 @@ namespace raytracer
         return os;
     }
 
-    void Mesh::Load(const Scene& scene)
+    void Mesh::Load(Scene& scene)
     {
         Object::Load(scene);
         if(_ply)
@@ -145,7 +173,18 @@ namespace raytracer
                 auto v0 = new Vector3f(scene.VertexData[Faces[i].x() - 1]);
                 auto v1 = new Vector3f(scene.VertexData[Faces[i].y() - 1]);
                 auto v2 = new Vector3f(scene.VertexData[Faces[i].z() - 1]);
-                _faces[i] = new Face(v0, v1, v2, &_material);
+                Vector2f* uv0 = new Vector2f(0,0);
+                Vector2f* uv1 = uv0;
+                Vector2f* uv2 = uv0;
+                if(scene.UVData.size() > Faces[i].x() - 1
+                    && scene.UVData.size() > Faces[i].y() - 1
+                    && scene.UVData.size() > Faces[i].z() - 1)
+                {
+                    uv0 = new Vector2f(scene.UVData[Faces[i].x() - 1]);
+                    uv1 = new Vector2f(scene.UVData[Faces[i].y() - 1]);
+                    uv2 = new Vector2f(scene.UVData[Faces[i].z() - 1]);
+                }
+                _faces[i] = new Face(v0, v1, v2, &_material, uv0, uv1, uv2);                
             }            
         }
         bvh = new BVH((IHittable**)_faces, _fCount);
@@ -174,6 +213,21 @@ namespace raytracer
         hit.Normal = (ltw.linear().inverse().transpose() * hit.Normal).normalized();
         hit.Object = this;
         hit.Material = _material;
+        hit.Texture = DiffuseMap;
+        if(NormalMap != nullptr)
+        {
+            SamplerData data;
+            data.u = hit.u;
+            data.v = hit.v;
+            hit.Normal = hit.TBN * NormalMap->SampleNormal(data);
+        }
+        else if(BumpMap != nullptr)
+        {
+            SamplerData data;
+            data.u = hit.u;
+            data.v = hit.v;
+            hit.Normal = BumpMap->SampleBump(data, hit.TBN);
+        }
         if(ret){
             hit.T = (hit.Point - wray.Origin).norm();
         }
@@ -201,13 +255,14 @@ namespace raytracer
         return os;
     }
 
-    void Triangle::Load(const Scene& scene)
+    void Triangle::Load(Scene& scene)
     {
         Object::Load(scene);
         auto v0 = new Vector3f(scene.VertexData[Indices.x() - 1]);
         auto v1 = new Vector3f(scene.VertexData[Indices.y() - 1]);
         auto v2 = new Vector3f(scene.VertexData[Indices.z() - 1]);
-        _face = Face(v0, v1, v2, &_material);        
+        auto u = new Vector2f(0, 0);
+        _face = Face(v0, v1, v2, &_material, u, u, u);        
         aabb = AABB(_face.aabb);
         aabb.ApplyTransform(LocalToWorld);
     }   
@@ -222,6 +277,7 @@ namespace raytracer
         bool ret = _face.Hit(ray, hit);
         hit.Point = LocalToWorld * hit.Point;
         hit.Normal = (LocalToWorld.linear().inverse().transpose() * hit.Normal).normalized();
+        hit.Texture = DiffuseMap;
         return ret;
     }
 
@@ -239,7 +295,7 @@ namespace raytracer
         return os;
     }
 
-    void Sphere::Load(const Scene& scene)
+    void Sphere::Load(Scene& scene)
     {
         Object::Load(scene);
         _center = scene.VertexData[CenterId - 1];
@@ -287,6 +343,34 @@ namespace raytracer
             hit.Object = this;
             hit.Point = ray.Origin + ray.Direction * hit.T;
             hit.Normal = (hit.Point - _center).normalized();
+            auto p = hit.Normal.normalized();
+
+            // calc uv
+            float ut = std::acos(p.y() / 1); // theta
+            float us = std::atan2(p.z(), p.x()); // phi
+            hit.u = (-us + M_PI) / (2 * M_PI);
+            hit.v = ut / M_PI;
+
+            p = hit.Point - _center;
+            ut = std::acos(p.y() / Radius); // theta
+            us = std::atan2(p.z(), p.x()); // phi
+            Vector3f T = Vector3f(p.z() * 2 * M_PI, 0, p.x() * (-2) * M_PI).normalized();             
+            Vector3f B = Vector3f(p.y() * std::cos(us) * M_PI, -Radius * std::sin(ut) * M_PI, p.y() * std::sin(us) * M_PI).normalized();
+            hit.TBN(0, 0) = T.x(); hit.TBN(0, 1) = B.x(); hit.TBN(0, 2) = hit.Normal.x();
+            hit.TBN(1, 0) = T.y(); hit.TBN(1, 1) = B.y(); hit.TBN(1, 2) = hit.Normal.y();
+            hit.TBN(2, 0) = T.z(); hit.TBN(2, 1) = B.z(); hit.TBN(2, 2) = hit.Normal.z();
+            if(NormalMap != nullptr)
+            {
+                SamplerData data;
+                data.u = hit.u; data.v = hit.v;
+                hit.Normal = hit.TBN * NormalMap->SampleNormal(data);                
+            }
+            else if(BumpMap != nullptr)
+            {
+                SamplerData data;
+                data.u = hit.u; data.v = hit.v;
+                hit.Normal = BumpMap->SampleBump(data, hit.TBN).normalized();                
+            }
 
             auto ltw = LocalToWorld;
             ltw.pretranslate(MotionBlur * wray.Time);
@@ -294,6 +378,7 @@ namespace raytracer
             hit.Normal = (ltw.linear().inverse().transpose() * hit.Normal).normalized();
             hit.Object = this;
             hit.Material = _material;
+            hit.Texture = DiffuseMap;
             return true;
         }
     }
@@ -301,8 +386,8 @@ namespace raytracer
     Face::Face() 
     {    }
     
-    Face::Face(Vector3f* v0, Vector3f* v1, Vector3f* v2, Material* material)
-        : V0(v0), V1(v1), V2(v2)
+    Face::Face(Vector3f* v0, Vector3f* v1, Vector3f* v2, Material* material, Vector2f* uv0, Vector2f* uv1, Vector2f* uv2)
+        : V0(v0), V1(v1), V2(v2), UV0(uv0), UV1(uv1), UV2(uv2)
     {
         _material = material;
         Normal = ((*v1) - (*v0)).cross((*v2) - (*v0)).normalized();
@@ -315,6 +400,21 @@ namespace raytracer
         aabb.Bounds[1].y() = std::max(std::max(V0->y(), V1->y()), V2->y());
         aabb.Bounds[1].z() = std::max(std::max(V0->z(), V1->z()), V2->z());
         aabb.Center = (aabb.Bounds[0] + aabb.Bounds[1]) / 2;
+
+        Matrix<float, 2, 3> e;
+        e(0,0) = V0V1.x(); e(0,1) = V0V1.y(); e(0,2) = V0V1.z();
+        e(1,0) = V0V2.x(); e(1,1) = V0V2.y(); e(1,2) = V0V2.z();
+        Matrix<float, 2, 2> u;
+        u(0, 0) = (*UV1).x() - (*UV0).x(); u(0, 1) = (*UV1).y() - (*UV0).y();
+        u(1, 0) = (*UV2).x() - (*UV0).x(); u(1, 1) = (*UV2).y() - (*UV0).y();
+        u = u.inverse().eval();
+        Matrix<float, 2, 3> tb;
+        tb = u * e;
+        auto t = Vector3f(tb(0,0), tb(0,1), tb(0,2));
+        auto b = Vector3f(tb(1,0), tb(1,1), tb(1,2));
+        TBN(0, 0) = t.x(); TBN(0, 1) = b.x(); TBN(0, 2) = Normal.x();
+        TBN(1, 0) = t.y(); TBN(1, 1) = b.y(); TBN(1, 2) = Normal.y();
+        TBN(2, 0) = t.z(); TBN(2, 1) = b.z(); TBN(2, 2) = Normal.z();
     }
 
     bool Face::Hit(const Ray& ray, RayHit& hit)
@@ -353,6 +453,10 @@ namespace raytracer
             hit.Normal = Normal;
         }
         hit.Material = *_material;
+        auto uv = (*UV0) + u * ((*UV1) - (*UV0)) + v * ((*UV2) - (*UV0));
+        hit.u = uv.x();
+        hit.v = uv.y();
+        hit.TBN = TBN;
         return true;
     }
 
@@ -534,7 +638,7 @@ namespace raytracer
         ResetTransform = node.attribute("resetTransform").as_bool();
     }
 
-    void MeshInstance::Load(const Scene& scene)
+    void MeshInstance::Load(Scene& scene)
     {
         Object::Load(scene);
         for(int i = 0; i < scene.Objects.size(); i++)
@@ -576,6 +680,7 @@ namespace raytracer
         hit.Normal = (ltw.linear().inverse().transpose() * hit.Normal).normalized();
         hit.Object = this;
         hit.Material = _material;
+        hit.Texture = DiffuseMap;
         if(ret){
             hit.T = (hit.Point - wray.Origin).norm();
         }
