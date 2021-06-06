@@ -94,6 +94,10 @@ namespace raytracer
             {
                 Scalings.push_back(ScalingFrom(transform));
             }
+            else if(std::strcmp("Composite", transform.name()) == 0)
+            {
+                Composite.push_back(CompositeFrom(transform));
+            }
         }
         auto images = node.child("Textures").child("Images");
         for(auto& image: images.children())
@@ -139,22 +143,10 @@ namespace raytracer
     {
         auto ret = Root->Hit(ray, hit);
         ray.Dist = hit.T;
-        //bool ret = false;
-        //hit.T = maxDist;
-        //for(int i = 0; i < Objects.size(); i++)
-        //{
-        //    RayHit thit;            
-        //    thit.T = FLT_MAX;
-        //    if(Objects[i]->aabb->Hit(ray, thit) && thit.T < hit.T)
-        //    {
-        //        ret = true;
-        //        hit = thit;
-        //    }
-        //}
         return ret;
     }
 
-    Vector3f Scene::Trace(Ray& ray, Camera& cam, int depth)
+    Vector3f Scene::Trace(Ray& ray, Camera& cam, int depth, Vector2i& xy)
     {
         Vector3f color(0, 0, 0);
         RayHit hit;              
@@ -166,7 +158,7 @@ namespace raytracer
             {
                 Vector3f reflect = Reflect(ray.Direction, hit.Normal, hit.Material.Roughness);
                 ray = Ray(hit.Point + hit.Normal * ShadowRayEpsilon, reflect, ray.Time);
-                auto cl = Trace(ray, cam, depth - 1);
+                auto cl = Trace(ray, cam, depth - 1, xy);
                 color = color + hit.Material.MirrorReflectance.cwiseProduct(cl);
             }
             else if(hit.Material.Type == 2)
@@ -186,7 +178,7 @@ namespace raytracer
                 {
                     Ray rray = Ray(hit.Point + normal * ShadowRayEpsilon, reflect, ray.Time);
                     rray.N = ray.N;
-                    Vector3f l1 = Trace(rray, cam, depth - 1);
+                    Vector3f l1 = Trace(rray, cam, depth - 1, xy);
                     RayHit rmphit;
                     if(ray.N != 1)
                     {
@@ -208,10 +200,10 @@ namespace raytracer
                     float ft = 1 - fr;
                     Ray rray = Ray(hit.Point + normal * ShadowRayEpsilon, reflect, ray.Time);
                     rray.N = ray.N;
-                    Vector3f l1 = Trace(rray, cam, depth - 1) * fr;
+                    Vector3f l1 = Trace(rray, cam, depth - 1, xy) * fr;
                     Ray tray = Ray(hit.Point - normal * ShadowRayEpsilon, reftrac, ray.Time);
                     tray.N = n2;
-                    Vector3f l0 = Trace(tray, cam, depth - 1) * ft;
+                    Vector3f l0 = Trace(tray, cam, depth - 1, xy) * ft;
                     RayHit tmphit, rmphit;
                     if(ray.N == 1)
                     {
@@ -244,7 +236,7 @@ namespace raytracer
                 float rp = ((n*n + k*k) * ndi*ndi - 2*n*ndi + 1) / ((n*n + k*k) * ndi*ndi + 2*n*ndi + 1);
                 float fr = (rs + rp) / 2;
                 Ray rray = Ray(hit.Point + hit.Normal * ShadowRayEpsilon, reflect, ray.Time);
-                auto cl = Trace(rray, cam, depth - 1);
+                auto cl = Trace(rray, cam, depth - 1, xy);
                 color = color + hit.Material.MirrorReflectance.cwiseProduct(cl) * fr;
             }
 
@@ -303,7 +295,17 @@ namespace raytracer
         }
         else
         {
-            color = BackgroundColor;
+            if(BackTexture != nullptr)
+            {
+                SamplerData data;
+                data.u = (float)xy.x() / cam.ImageResolution.x();
+                data.v = (float)xy.y() / cam.ImageResolution.y();
+                color = BackTexture->Sample(data) * 255;
+            }
+            else
+            {
+                color = BackgroundColor;
+            }
         }  
         return color;
     }
@@ -315,7 +317,7 @@ namespace raytracer
             std::vector<unsigned char> pixels;
             pixels.resize(cam.ImageResolution.x() * cam.ImageResolution.y() * 4);
             int size = cam.ImageResolution.x() * cam.ImageResolution.y();
-            int cores = 1;//std::thread::hardware_concurrency();
+            int cores = std::thread::hardware_concurrency();
             volatile std::atomic<int> count(0);
             std::vector<std::future<void>> futures;
             while(cores--)
@@ -332,9 +334,10 @@ namespace raytracer
                             int y = index / cam.ImageResolution.x();                            
                             auto rays = cam.GetRay(x, y);
                             Vector3f cl = Vector3f::Zero();
+                            Vector2i xy(x, y);
                             for(int r = 0; r < rays.size(); r++)
-                            {
-                                cl += Trace(rays[r], cam, MaxRecursionDepth);
+                            {                                
+                                cl += Trace(rays[r], cam, MaxRecursionDepth, xy);
                             }
                             cl /= rays.size();
                             pixels[4 * index] = cl.x() > 255 ? 255 : cl.x();

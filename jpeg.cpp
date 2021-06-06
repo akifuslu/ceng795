@@ -8,7 +8,7 @@ extern "C" {
 }
 
 
-void read_jpeg_header(const char *filename, unsigned& width, unsigned& height)
+void read_jpeg_header(const char *filename, unsigned& width, unsigned& height, int& mode)
 {
 	struct jpeg_decompress_struct cinfo;
 	struct jpeg_error_mgr jerr;
@@ -34,6 +34,12 @@ void read_jpeg_header(const char *filename, unsigned& width, unsigned& height)
 	jpeg_start_decompress(&cinfo);
 	width = cinfo.output_width;
 	height = cinfo.output_height;
+    if(cinfo.out_color_space == JCS_GRAYSCALE)
+        mode = 0;
+    else if(cinfo.out_color_space == JCS_RGB)
+        mode = 1;
+    else
+        mode = 2;    
 }
 
 void read_jpeg(const char *filename, std::vector<unsigned char>& image, unsigned width, unsigned height)
@@ -69,15 +75,18 @@ void read_jpeg(const char *filename, std::vector<unsigned char>& image, unsigned
 
 	row_pointer = (JSAMPROW) malloc(sizeof(JSAMPLE)*(width)*3);
 
+    int stride = 3;
+    if(cinfo.out_color_space == JCS_GRAYSCALE)
+        stride = 1;
 	while (cinfo.output_scanline < cinfo.output_height) 
     {
 		jpeg_read_scanlines(&cinfo, &row_pointer, 1);
 
 		for(j=0; j < width; j++) 
         {
-			for(k=0; k < 3; k++)
+			for(k=0; k < stride; k++)
             {
-                image[(cinfo.output_scanline - 1) * width * 3 + j * 3 + k] = (unsigned char) row_pointer[3*j + k];
+                image[(cinfo.output_scanline - 1) * width * stride + j * stride + k] = (unsigned char) row_pointer[stride*j + k];
             }
         }
 	}

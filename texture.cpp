@@ -10,41 +10,56 @@ namespace raytracer{
         auto extension = name.substr(npos + 1);
         if(extension.compare("png") == 0)
         {
+            stride = 4;
             Mode = ImageMode::RGBA;
             lodepng::decode(Pixels, Width, Height, name);
         }
         else if(extension.compare("jpg") == 0)
         {
             Mode = ImageMode::RGB;
-            read_jpeg_header(name.c_str(), Width, Height);   
-            Pixels.resize(Height * Width * 3);
+            int mode;
+            read_jpeg_header(name.c_str(), Width, Height, mode);   
+            if(mode == 0)
+            {
+                Mode = ImageMode::GRAYSCALE;
+                stride = 1;
+            }
+            else if(mode == 1)
+            {
+                Mode = ImageMode::RGB;
+                stride = 3;
+            }
+            else
+            {
+                std::cout << "UNSUPPORTED JPG FORMAT!" << std::endl;
+                exit(0);
+            }            
+            Pixels.resize(Height * Width * stride);
             read_jpeg(name.c_str(), Pixels, Width, Height);     
         }
     }
 
     Vector3f Image::Fetch(int x, int y)
     {
-        int stride = 0;
-        if(Mode == ImageMode::RGB)
-            stride = 3;
-        else if(Mode == ImageMode::RGBA)
-            stride = 4;
-
-        if(x > Width)
+        if(x >= Width)
             x = Width - 1;
-        if(y > Height)
+        if(y >= Height)
             y = Height - 1;
         Vector3f p;
         int o = stride * y * Width + stride * x;
-        p.x() = Pixels[o];
-        p.y() = Pixels[o + 1];
-        p.z() = Pixels[o + 2];
+        if(Mode == RGB || Mode == RGBA)
+        {
+            p.x() = Pixels[o];
+            p.y() = Pixels[o + 1];
+            p.z() = Pixels[o + 2];
+        }
+        else
+        {
+            p.x() = Pixels[o];
+            p.y() = Pixels[o];
+            p.z() = Pixels[o];            
+        }        
         return p;
-    }
-
-    Perlin::Perlin()
-    {
-
     }
 
     ImageSampler::ImageSampler(pugi::xml_node node)
@@ -67,6 +82,8 @@ namespace raytracer{
     {
         float u = data.u;
         float v = data.v;
+        u = u - std::floor(u);
+        v = v - std::floor(v);
         if(Interpolation == Interpolation::NEAREST)
         {   
             int x = (int)(u * (Image->Width - 1));
@@ -93,11 +110,21 @@ namespace raytracer{
     {
         float u = data.u;
         float v = data.v;
+        u = u - std::floor(u);
+        v = v - std::floor(v);
         int x = (int)(u * (Image->Width - 1));
         int y = (int)(v * (Image->Height - 1));
-        float dx = (Image->Fetch(x + 1, y).x() - Image->Fetch(x, y).x()) / 255;
-        float dy = (Image->Fetch(x, y + 1).y() - Image->Fetch(x, y).y()) / 255;
-        return (n - (t * dx * f + b * dy * f)).normalized();
+        float dxr = (Image->Fetch(x + 1, y).x() - Image->Fetch(x, y).x());
+        float dxg = (Image->Fetch(x + 1, y).y() - Image->Fetch(x, y).y());
+        float dxb = (Image->Fetch(x + 1, y).z() - Image->Fetch(x, y).z());
+
+        float dyr = (Image->Fetch(x, y + 1).x() - Image->Fetch(x, y).x());
+        float dyg = (Image->Fetch(x, y + 1).y() - Image->Fetch(x, y).y());
+        float dyb = (Image->Fetch(x, y + 1).z() - Image->Fetch(x, y).z());
+
+        float dx = (dxr + dxg + dxb) / 3;
+        float dy = (dyr + dyg + dyb) / 3;
+        return (n - f * (t * dx + b * dy)).normalized();
     }
 
     PerlinSampler::PerlinSampler(pugi::xml_node node)
@@ -196,8 +223,9 @@ namespace raytracer{
         return Vector3f(sum, sum, sum);
     }
 
-    Vector3f PerlinSampler::SampleBump(SamplerData& data, Vector3f& t, Vector3f& b, Vector3f& n, float f)
+    Vector3f PerlinSampler::SampleBump(SamplerData& data, Vector3f& t, Vector3f& b, Vector3f& np, float f)
     {
+        auto n = data.normal;
         float eps = 0.001f;
         float c = Sample(data).x();
         data.point.x() += eps;
@@ -211,11 +239,39 @@ namespace raytracer{
         data.point.z() -= eps;
     
         auto grad = Vector3f(dx, dy, dz);
-        float d = grad.dot(n);
-        grad = grad - n * d;
-        return (n.dot(grad) * f * n).normalized();
+        auto gp = grad.dot(n) * n;
+        auto go = grad - gp;
+        return n - f * go; 
     }
 
+    CheckerBoardSampler::CheckerBoardSampler(pugi::xml_node node)
+    {
+        BlackColor = Vec3fFrom(node.child("BlackColor"));
+        WhiteColor = Vec3fFrom(node.child("WhiteColor"));
+        Scale = node.child("Scale").text().as_float();
+        Offset = node.child("Offset").text().as_float();
+    }
+
+    Vector3f CheckerBoardSampler::Sample(SamplerData& data)
+    {
+        auto p = data.point * Scale + Vector3f(Offset, Offset, Offset);
+        int x = (int)std::floor(p.x()) % 2;
+        int y = (int)std::floor(p.y()) % 2;
+        int z = (int)std::floor(p.z()) % 2;
+        x = x < 0 ? x + 2 : x;
+        y = y < 0 ? y + 2 : y;
+        z = z < 0 ? z + 2 : z;
+        // there might be a better way to do it lol anyways
+        if(x == 0 && y == 0 && z == 0) return WhiteColor;
+        else if(x == 0 && y == 0 && z == 1) return BlackColor;
+        else if(x == 0 && y == 1 && z == 0) return BlackColor;
+        else if(x == 0 && y == 1 && z == 1) return WhiteColor;
+        else if(x == 1 && y == 0 && z == 0) return BlackColor;
+        else if(x == 1 && y == 0 && z == 1) return WhiteColor;
+        else if(x == 1 && y == 1 && z == 0) return WhiteColor;
+        else if(x == 1 && y == 1 && z == 1) return BlackColor;
+        std::cout << x << y << z << std::endl;
+    }
 
     Texture::Texture(pugi::xml_node node)
     {
@@ -223,6 +279,10 @@ namespace raytracer{
         if(_type.compare("perlin") == 0)
         {
             Sampler = new PerlinSampler(node);
+        }
+        else if(_type.compare("checkerboard") == 0)
+        {
+            Sampler = new CheckerBoardSampler(node);
         }
         else if(_type.compare("image") == 0)
         {
@@ -233,6 +293,11 @@ namespace raytracer{
     BackgroundTexture::BackgroundTexture(pugi::xml_node node) : Texture(node)
     {
 
+    }
+
+    Vector3f BackgroundTexture::Sample(SamplerData& data)
+    {
+        return Sampler->Sample(data);
     }
 
     DiffuseTexture::DiffuseTexture(pugi::xml_node node) : Texture(node)
@@ -279,6 +344,9 @@ namespace raytracer{
         Vector3f t = tbn.col(0).transpose();
         Vector3f b = tbn.col(1).transpose();
         Vector3f np = tbn.col(2).transpose();
-        return Sampler->SampleBump(data, t, b, np, Factor);
+        auto n = t.cross(b);
+        if(n.dot(np) < 0)
+            n *= -1;
+        return Sampler->SampleBump(data, t, b, n, Factor);
     }
 }

@@ -36,12 +36,13 @@ namespace raytracer
             std::vector<Translation3f> Translations;
             std::vector<AngleAxisf> Rotations;
             std::vector<AlignedScaling3f> Scalings;
-            BackgroundTexture* BackTexture;
+            std::vector<Transform<float, 3, Affine>> Composite;
+            BackgroundTexture* BackTexture = nullptr;
             std::unordered_map<int, Texture*> Textures;
 
             friend std::ostream& operator<<(std::ostream& os, const Scene& scene);
         private:
             bool RayCast(Ray& ray, RayHit& hit, float maxDist, bool closest);
-            Vector3f Trace(Ray& ray, Camera& cam, int depth);
+            Vector3f Trace(Ray& ray, Camera& cam, int depth, Vector2i& xy);
     };
 }

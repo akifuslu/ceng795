@@ -128,6 +128,8 @@ namespace raytracer
             Face** _faces;
             int _fCount;
             bool _ply = false;
+            int _offset;
+            int _tOffset;
     };
 
     class MeshInstance : public Object

@@ -62,7 +62,11 @@ namespace raytracer
             else if(type == 'r')
             {
                 LocalToWorld = scene.Rotations[id - 1] * LocalToWorld;
-            }            
+            }           
+            else if(type == 'c')
+            {
+                LocalToWorld = scene.Composite[id - 1];
+            } 
         }
         WorldToLocal = LocalToWorld.inverse(TransformTraits::Affine);
         // map textures
@@ -96,6 +100,8 @@ namespace raytracer
     Mesh::Mesh(pugi::xml_node node) : Object(node)
     {
         const char* ply = node.child("Faces").attribute("plyFile").as_string();
+        _offset = node.child("Faces").attribute("vertexOffset").as_int(0);        
+        _tOffset = node.child("Faces").attribute("textureOffset").as_int(0);        
         if(std::strcmp(ply, "") == 0)
         {
             auto faces = node.child("Faces").text().as_string();
@@ -112,7 +118,7 @@ namespace raytracer
             _ply = true;
             happly::PLYData plyIn(ply);
             std::vector<std::array<double, 3>> vPos = plyIn.getVertexPositions();
-            std::vector<std::vector<size_t>> fInd = plyIn.getFaceIndices();            
+            std::vector<std::vector<size_t>> fInd = plyIn.getFaceIndices();      
             if(fInd[0].size() == 3)
                 _fCount = fInd.size();
             else
@@ -122,12 +128,13 @@ namespace raytracer
             int f = 0;
             for(int i = 0; i < fInd.size(); i++)
             {
+                Vector2f* uv0 = new Vector2f();
                 if(fInd[i].size() == 3)
                 {
                     auto v0 = new Vector3f(vPos[fInd[i][0]][0], vPos[fInd[i][0]][1], vPos[fInd[i][0]][2]);
                     auto v1 = new Vector3f(vPos[fInd[i][1]][0], vPos[fInd[i][1]][1], vPos[fInd[i][1]][2]);
                     auto v2 = new Vector3f(vPos[fInd[i][2]][0], vPos[fInd[i][2]][1], vPos[fInd[i][2]][2]);
-                    _faces[f++] = new Face(v0, v1, v2, &_material, 0, 0, 0);
+                    _faces[f++] = new Face(v0, v1, v2, &_material, uv0, uv0, uv0);
                 }
                 else if(fInd[i].size() == 4)
                 {
@@ -135,8 +142,8 @@ namespace raytracer
                     auto v1 = new Vector3f(vPos[fInd[i][1]][0], vPos[fInd[i][1]][1], vPos[fInd[i][1]][2]);
                     auto v2 = new Vector3f(vPos[fInd[i][2]][0], vPos[fInd[i][2]][1], vPos[fInd[i][2]][2]);
                     auto v3 = new Vector3f(vPos[fInd[i][3]][0], vPos[fInd[i][3]][1], vPos[fInd[i][3]][2]);
-                    _faces[f++] = new Face(v0, v1, v2, &_material, 0, 0, 0);
-                    _faces[f++] = new Face(v0, v2, v3, &_material, 0, 0, 0);
+                    _faces[f++] = new Face(v0, v1, v2, &_material, uv0, uv0, uv0);
+                    _faces[f++] = new Face(v0, v2, v3, &_material, uv0, uv0, uv0);
                 }
             }
         }
@@ -170,19 +177,19 @@ namespace raytracer
             _faces = new Face*[Faces.size()];
             for(int i = 0; i < Faces.size(); i++)
             {
-                auto v0 = new Vector3f(scene.VertexData[Faces[i].x() - 1]);
-                auto v1 = new Vector3f(scene.VertexData[Faces[i].y() - 1]);
-                auto v2 = new Vector3f(scene.VertexData[Faces[i].z() - 1]);
+                auto v0 = new Vector3f(scene.VertexData[Faces[i].x() - 1 + _offset]);
+                auto v1 = new Vector3f(scene.VertexData[Faces[i].y() - 1 + _offset]);
+                auto v2 = new Vector3f(scene.VertexData[Faces[i].z() - 1 + _offset]);
                 Vector2f* uv0 = new Vector2f(0,0);
                 Vector2f* uv1 = uv0;
                 Vector2f* uv2 = uv0;
-                if(scene.UVData.size() > Faces[i].x() - 1
-                    && scene.UVData.size() > Faces[i].y() - 1
-                    && scene.UVData.size() > Faces[i].z() - 1)
+                if(scene.UVData.size() > (Faces[i].x() - 1 + _tOffset)
+                    && scene.UVData.size() > (Faces[i].y() - 1 + _tOffset)
+                    && scene.UVData.size() > (Faces[i].z() - 1 + _tOffset))
                 {
-                    uv0 = new Vector2f(scene.UVData[Faces[i].x() - 1]);
-                    uv1 = new Vector2f(scene.UVData[Faces[i].y() - 1]);
-                    uv2 = new Vector2f(scene.UVData[Faces[i].z() - 1]);
+                    uv0 = new Vector2f(scene.UVData[Faces[i].x() - 1 + _tOffset]);
+                    uv1 = new Vector2f(scene.UVData[Faces[i].y() - 1 + _tOffset]);
+                    uv2 = new Vector2f(scene.UVData[Faces[i].z() - 1 + _tOffset]);
                 }
                 _faces[i] = new Face(v0, v1, v2, &_material, uv0, uv1, uv2);                
             }            
@@ -190,9 +197,9 @@ namespace raytracer
         bvh = new BVH((IHittable**)_faces, _fCount);
         aabb = AABB(bvh->aabb);
         auto ltw = LocalToWorld;
-        float sx = MotionBlur.x() == 0 ? 1 : MotionBlur.x();
-        float sy = MotionBlur.y() == 0 ? 1 : MotionBlur.y();
-        float sz = MotionBlur.z() == 0 ? 1 : MotionBlur.z();        
+        float sx = std::fabs(MotionBlur.x()) + 1;
+        float sy = std::fabs(MotionBlur.y()) + 1;
+        float sz = std::fabs(MotionBlur.z()) + 1;        
         ltw.scale(Vector3f(sx, sy, sz));
         aabb.ApplyTransform(ltw);        
     }   
@@ -207,10 +214,6 @@ namespace raytracer
         wtl.translate(MotionBlur * -wray.Time); 
         Ray ray(wtl * wray.Origin, (wtl.linear() * wray.Direction).normalized());
         bool ret = bvh->Hit(ray, hit);
-        auto ltw = LocalToWorld;
-        ltw.pretranslate(MotionBlur * wray.Time);
-        hit.Point = ltw * hit.Point;
-        hit.Normal = (ltw.linear().inverse().transpose() * hit.Normal).normalized();
         hit.Object = this;
         hit.Material = _material;
         hit.Texture = DiffuseMap;
@@ -226,8 +229,15 @@ namespace raytracer
             SamplerData data;
             data.u = hit.u;
             data.v = hit.v;
+            data.point = hit.Point;
+            data.normal = hit.Normal;
             hit.Normal = BumpMap->SampleBump(data, hit.TBN);
         }
+        auto ltw = LocalToWorld;
+        ltw.pretranslate(MotionBlur * wray.Time);
+        hit.Point = ltw * hit.Point;
+        hit.Normal = (ltw.linear().inverse().transpose() * hit.Normal).normalized();
+
         if(ret){
             hit.T = (hit.Point - wray.Origin).norm();
         }
@@ -343,7 +353,7 @@ namespace raytracer
             hit.Object = this;
             hit.Point = ray.Origin + ray.Direction * hit.T;
             hit.Normal = (hit.Point - _center).normalized();
-            auto p = hit.Normal.normalized();
+            auto p = hit.Normal;
 
             // calc uv
             float ut = std::acos(p.y() / 1); // theta
@@ -354,8 +364,9 @@ namespace raytracer
             p = hit.Point - _center;
             ut = std::acos(p.y() / Radius); // theta
             us = std::atan2(p.z(), p.x()); // phi
-            Vector3f T = Vector3f(p.z() * 2 * M_PI, 0, p.x() * (-2) * M_PI).normalized();             
-            Vector3f B = Vector3f(p.y() * std::cos(us) * M_PI, -Radius * std::sin(ut) * M_PI, p.y() * std::sin(us) * M_PI).normalized();
+
+            Vector3f T = Vector3f(p.z() * 2 * M_PI, 0, p.x() * (-2) * M_PI);             
+            Vector3f B = Vector3f(p.y() * std::cos(us) * M_PI, -Radius * std::sin(ut) * M_PI, p.y() * std::sin(us) * M_PI);
             hit.TBN(0, 0) = T.x(); hit.TBN(0, 1) = B.x(); hit.TBN(0, 2) = hit.Normal.x();
             hit.TBN(1, 0) = T.y(); hit.TBN(1, 1) = B.y(); hit.TBN(1, 2) = hit.Normal.y();
             hit.TBN(2, 0) = T.z(); hit.TBN(2, 1) = B.z(); hit.TBN(2, 2) = hit.Normal.z();
@@ -369,9 +380,10 @@ namespace raytracer
             {
                 SamplerData data;
                 data.u = hit.u; data.v = hit.v;
+                data.point = hit.Point;
+                data.normal = hit.Normal;
                 hit.Normal = BumpMap->SampleBump(data, hit.TBN).normalized();                
             }
-
             auto ltw = LocalToWorld;
             ltw.pretranslate(MotionBlur * wray.Time);
             hit.Point = ltw * hit.Point;
@@ -379,6 +391,7 @@ namespace raytracer
             hit.Object = this;
             hit.Material = _material;
             hit.Texture = DiffuseMap;
+            hit.T = (hit.Point - wray.Origin).norm();
             return true;
         }
     }

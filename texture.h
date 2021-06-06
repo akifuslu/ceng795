@@ -8,6 +8,7 @@
 #include "Eigen/Dense"
 #include <random>
 #include <algorithm>
+#include "vecfrom.h"
 
 using namespace Eigen;
 
@@ -16,7 +17,8 @@ namespace raytracer
 
     enum ImageMode{
         RGB,
-        RGBA
+        RGBA,
+        GRAYSCALE
     };
 
     enum TextureType{
@@ -44,6 +46,7 @@ namespace raytracer
     {
         float u, v;
         Vector3f point;
+        Vector3f normal;
     };
 
     class Image
@@ -55,12 +58,7 @@ namespace raytracer
             unsigned Width = 0;
             unsigned Height = 0;
             ImageMode Mode;
-    };
-
-    class Perlin
-    {
-        public:
-            Perlin();
+            int stride;
     };
 
     class Sampler
@@ -112,6 +110,17 @@ namespace raytracer
             }
     };    
 
+    class CheckerBoardSampler : public Sampler
+    {
+        public:
+            CheckerBoardSampler(pugi::xml_node node);
+            virtual Vector3f Sample(SamplerData& data) override;
+            Vector3f BlackColor;
+            Vector3f WhiteColor;
+            float Scale;
+            float Offset;
+    };
+
     class Texture
     {
         public:
@@ -127,6 +136,7 @@ namespace raytracer
     {
         public:
             BackgroundTexture(pugi::xml_node node);
+            Vector3f Sample(SamplerData& data);
     };
 
     class DiffuseTexture : public Texture

@@ -68,6 +68,17 @@ namespace raytracer
         return AlignedScaling3f(x, y, z);
     }
 
+    static Transform<float, 3, Affine> CompositeFrom(pugi::xml_node node)
+    {
+        Transform<float, 3, Affine> ret;
+        std::stringstream stream(node.first_child().value());
+        stream >> ret(0,0) >> ret(0,1) >> ret(0,2) >> ret(0, 3);
+        stream >> ret(1,0) >> ret(1,1) >> ret(1,2) >> ret(1, 3);
+        stream >> ret(2,0) >> ret(2,1) >> ret(2,2) >> ret(2, 3);
+        stream >> ret(3,0) >> ret(3,1) >> ret(3,2) >> ret(3, 3);
+        return ret;
+    }
+
     static std::default_random_engine gen;
     static std::uniform_real_distribution<float> rand(-.5f,0.5f);
 
