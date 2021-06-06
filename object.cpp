@@ -2,9 +2,9 @@
 #include <sstream>
 #include <cfloat>
 #include <cmath>
-#include "happly.h"
 #include <string>
 #include "scene.h"
+#include "plyLoader.h"
 
 namespace raytracer
 {
@@ -102,6 +102,9 @@ namespace raytracer
         const char* ply = node.child("Faces").attribute("plyFile").as_string();
         _offset = node.child("Faces").attribute("vertexOffset").as_int(0);        
         _tOffset = node.child("Faces").attribute("textureOffset").as_int(0);        
+        auto shd = node.attribute("shadingMode").as_string();
+        if(std::strcmp(shd, "smooth") == 0)
+            _smooth = true;
         if(std::strcmp(ply, "") == 0)
         {
             auto faces = node.child("Faces").text().as_string();
@@ -116,35 +119,28 @@ namespace raytracer
         else
         {
             _ply = true;
-            happly::PLYData plyIn(ply);
-            std::vector<std::array<double, 3>> vPos = plyIn.getVertexPositions();
-            std::vector<std::vector<size_t>> fInd = plyIn.getFaceIndices();      
-            if(fInd[0].size() == 3)
-                _fCount = fInd.size();
-            else
-                _fCount = fInd.size() * 2;
-            
+            auto tris = load_trimesh_from_ply(ply);
+            auto vPos = tris->pos;
+            auto uvs = tris->uv;
+            auto fInd = tris->indices;
+            _fCount = tris->numIndices / 3;
             _faces = new Face*[_fCount];
             int f = 0;
-            for(int i = 0; i < fInd.size(); i++)
+            for(int i = 0; i < _fCount; i++)
             {
-                Vector2f* uv0 = new Vector2f();
-                if(fInd[i].size() == 3)
+                Vector2f* uv0 = nullptr;
+                Vector2f* uv1 = nullptr;
+                Vector2f* uv2 = nullptr;
+                if(uvs != nullptr)
                 {
-                    auto v0 = new Vector3f(vPos[fInd[i][0]][0], vPos[fInd[i][0]][1], vPos[fInd[i][0]][2]);
-                    auto v1 = new Vector3f(vPos[fInd[i][1]][0], vPos[fInd[i][1]][1], vPos[fInd[i][1]][2]);
-                    auto v2 = new Vector3f(vPos[fInd[i][2]][0], vPos[fInd[i][2]][1], vPos[fInd[i][2]][2]);
-                    _faces[f++] = new Face(v0, v1, v2, &_material, uv0, uv0, uv0);
+                    uv0 = new Vector2f(uvs[fInd[i * 3] * 2], uvs[fInd[i * 3] * 2 + 1]);
+                    uv1 = new Vector2f(uvs[fInd[i * 3 + 1] * 2], uvs[fInd[i * 3 + 1] * 2 + 1]);
+                    uv2 = new Vector2f(uvs[fInd[i * 3 + 2] * 2], uvs[fInd[i * 3 + 2] * 2 + 1]);
                 }
-                else if(fInd[i].size() == 4)
-                {
-                    auto v0 = new Vector3f(vPos[fInd[i][0]][0], vPos[fInd[i][0]][1], vPos[fInd[i][0]][2]);
-                    auto v1 = new Vector3f(vPos[fInd[i][1]][0], vPos[fInd[i][1]][1], vPos[fInd[i][1]][2]);
-                    auto v2 = new Vector3f(vPos[fInd[i][2]][0], vPos[fInd[i][2]][1], vPos[fInd[i][2]][2]);
-                    auto v3 = new Vector3f(vPos[fInd[i][3]][0], vPos[fInd[i][3]][1], vPos[fInd[i][3]][2]);
-                    _faces[f++] = new Face(v0, v1, v2, &_material, uv0, uv0, uv0);
-                    _faces[f++] = new Face(v0, v2, v3, &_material, uv0, uv0, uv0);
-                }
+                auto v0 = new Vector3f(vPos[fInd[i * 3 + 0] * 3], vPos[fInd[i * 3 + 0] * 3 + 1], vPos[fInd[i * 3 + 0] * 3 + 2]);
+                auto v1 = new Vector3f(vPos[fInd[i * 3 + 1] * 3], vPos[fInd[i * 3 + 1] * 3 + 1], vPos[fInd[i * 3 + 1] * 3 + 2]);
+                auto v2 = new Vector3f(vPos[fInd[i * 3 + 2] * 3], vPos[fInd[i * 3 + 2] * 3 + 1], vPos[fInd[i * 3 + 2] * 3 + 2]);
+                _faces[f++] = new Face(v0, v1, v2, &_material, uv0, uv1, uv2);
             }
         }
         
@@ -192,6 +188,35 @@ namespace raytracer
                     uv2 = new Vector2f(scene.UVData[Faces[i].z() - 1 + _tOffset]);
                 }
                 _faces[i] = new Face(v0, v1, v2, &_material, uv0, uv1, uv2);                
+            }
+            // calc smooth normals
+            if(_smooth)
+            {
+                for(int i = 0; i < Faces.size(); i++)
+                {
+                    int v0id = Faces[i].x() - 1 + _offset;
+                    int v1id = Faces[i].y() - 1 + _offset;
+                    int v2id = Faces[i].z() - 1 + _offset;
+                    Vector3f v0N = Vector3f::Zero();
+                    Vector3f v1N = Vector3f::Zero();
+                    Vector3f v2N = Vector3f::Zero();
+                    for(int j = 0; j < Faces.size(); j++)
+                    {
+                        int v0id2 = Faces[j].x() - 1 + _offset;
+                        int v1id2 = Faces[j].y() - 1 + _offset;
+                        int v2id2 = Faces[j].z() - 1 + _offset;
+                        if(v0id == v0id2 || v0id == v1id2 || v0id == v2id2)
+                            v0N = v0N + _faces[j]->Normal;
+                        if(v1id == v0id2 || v1id == v1id2 || v1id == v2id2)
+                            v1N = v1N + _faces[j]->Normal;
+                        if(v2id == v0id2 || v2id == v1id2 || v2id == v2id2)
+                            v2N = v2N + _faces[j]->Normal;
+                    }
+                    _faces[i]->V0N = v0N.normalized();
+                    _faces[i]->V1N = v1N.normalized();
+                    _faces[i]->V2N = v2N.normalized();
+                    _faces[i]->smooth = true;
+                }
             }            
         }
         bvh = new BVH((IHittable**)_faces, _fCount);
@@ -457,13 +482,19 @@ namespace raytracer
         }
         hit.T = t;
         hit.Point = ray.Origin + ray.Direction * t;
-        if(ray.Direction.dot(Normal) > 0)
+        auto n = Normal;
+        if(smooth)
         {
-            hit.Normal = Normal * -1;            
+            n = V0N + u * (V1N - V0N) + v * (V2N - V0N);
+            n.normalize();
+        }
+        if(ray.Direction.dot(n) > 0)
+        {
+            hit.Normal = n * -1;            
         }
         else
         {
-            hit.Normal = Normal;
+            hit.Normal = n;
         }
         hit.Material = *_material;
         auto uv = (*UV0) + u * ((*UV1) - (*UV0)) + v * ((*UV2) - (*UV0));

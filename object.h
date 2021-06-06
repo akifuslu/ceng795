@@ -88,10 +88,14 @@ namespace raytracer
             Vector3f Normal;
             Vector3f V0V1;
             Vector3f V0V2;
+            Vector3f V0N;
+            Vector3f V1N;
+            Vector3f V2N;
             virtual bool Hit(const Ray& ray, RayHit& hit) override;
 //        private:
             Material* _material;
             Matrix<float, 3, 3> TBN;
+            bool smooth = false;
     };
 
     class Object : public IHittable
@@ -130,6 +134,7 @@ namespace raytracer
             bool _ply = false;
             int _offset;
             int _tOffset;
+            bool _smooth = false;
     };
 
     class MeshInstance : public Object

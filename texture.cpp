@@ -254,23 +254,11 @@ namespace raytracer{
 
     Vector3f CheckerBoardSampler::Sample(SamplerData& data)
     {
-        auto p = data.point * Scale + Vector3f(Offset, Offset, Offset);
-        int x = (int)std::floor(p.x()) % 2;
-        int y = (int)std::floor(p.y()) % 2;
-        int z = (int)std::floor(p.z()) % 2;
-        x = x < 0 ? x + 2 : x;
-        y = y < 0 ? y + 2 : y;
-        z = z < 0 ? z + 2 : z;
-        // there might be a better way to do it lol anyways
-        if(x == 0 && y == 0 && z == 0) return WhiteColor;
-        else if(x == 0 && y == 0 && z == 1) return BlackColor;
-        else if(x == 0 && y == 1 && z == 0) return BlackColor;
-        else if(x == 0 && y == 1 && z == 1) return WhiteColor;
-        else if(x == 1 && y == 0 && z == 0) return BlackColor;
-        else if(x == 1 && y == 0 && z == 1) return WhiteColor;
-        else if(x == 1 && y == 1 && z == 0) return WhiteColor;
-        else if(x == 1 && y == 1 && z == 1) return BlackColor;
-        std::cout << x << y << z << std::endl;
+        int x = std::floor(data.u * Scale + Offset);
+        int y = std::floor(data.v * Scale + Offset);
+        if((x + y) % 2 == 0)
+            return WhiteColor;
+        return BlackColor;
     }
 
     Texture::Texture(pugi::xml_node node)
