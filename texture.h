@@ -18,7 +18,8 @@ namespace raytracer
     enum ImageMode{
         RGB,
         RGBA,
-        GRAYSCALE
+        GRAYSCALE,
+        HDR
     };
 
     enum TextureType{
@@ -49,6 +50,11 @@ namespace raytracer
         Vector3f normal;
     };
 
+    struct Hdr
+    {
+        float* Pixels;
+    }; 
+
     class Image
     {
         public:
@@ -59,6 +65,8 @@ namespace raytracer
             unsigned Height = 0;
             ImageMode Mode;
             int stride;
+        private:
+            Hdr* _hdr;
     };
 
     class Sampler
@@ -121,6 +129,29 @@ namespace raytracer
             float Offset;
     };
 
+    class VoronoiSampler : public Sampler
+    {
+        public:
+            VoronoiSampler(pugi::xml_node node);
+            virtual Vector3f Sample(SamplerData& data) override;
+            virtual Vector3f SampleBump(SamplerData& data, Vector3f& t, Vector3f& b, Vector3f& n, float f) override;
+            float Size;
+        private:
+            float random3to1(Vector3f p, Vector3f d)
+            {
+                float x = std::sinf(p.dot(d)) * 23453.2342;                
+                return x - std::floor(x); 
+            }        
+            Vector3f random3to3(Vector3f p)
+            {
+                float x = random3to1(p, Vector3f(124.3, 232.4, 634.1));
+                float y = random3to1(p, Vector3f(742.5, 145.3, 314.6));
+                float z = random3to1(p, Vector3f(923.9, 236.5, 892.6));
+                return Vector3f(x, y, z);
+            }
+    };
+
+
     class Texture
     {
         public:
@@ -161,4 +192,8 @@ namespace raytracer
             Vector3f SampleBump(SamplerData& data, Matrix<float, 3, 3>& tbn);
             float Factor;
     };
+
+    void WriteEXR(std::vector<Vector3f> pixels, const int width, const int height,
+                   const char *filename);
+
 }

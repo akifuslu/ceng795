@@ -137,6 +137,11 @@ namespace raytracer
                     uv1 = new Vector2f(uvs[fInd[i * 3 + 1] * 2], uvs[fInd[i * 3 + 1] * 2 + 1]);
                     uv2 = new Vector2f(uvs[fInd[i * 3 + 2] * 2], uvs[fInd[i * 3 + 2] * 2 + 1]);
                 }
+                else
+                {
+                    uv0 = uv1 = uv2 = new Vector2f(0, 0);
+                }                
+                Faces.push_back(Vector3i(fInd[i * 3 + 0], fInd[i * 3 + 1], fInd[i * 3 + 2]));
                 auto v0 = new Vector3f(vPos[fInd[i * 3 + 0] * 3], vPos[fInd[i * 3 + 0] * 3 + 1], vPos[fInd[i * 3 + 0] * 3 + 2]);
                 auto v1 = new Vector3f(vPos[fInd[i * 3 + 1] * 3], vPos[fInd[i * 3 + 1] * 3 + 1], vPos[fInd[i * 3 + 1] * 3 + 2]);
                 auto v2 = new Vector3f(vPos[fInd[i * 3 + 2] * 3], vPos[fInd[i * 3 + 2] * 3 + 1], vPos[fInd[i * 3 + 2] * 3 + 2]);
@@ -189,36 +194,36 @@ namespace raytracer
                 }
                 _faces[i] = new Face(v0, v1, v2, &_material, uv0, uv1, uv2);                
             }
-            // calc smooth normals
-            if(_smooth)
-            {
-                for(int i = 0; i < Faces.size(); i++)
-                {
-                    int v0id = Faces[i].x() - 1 + _offset;
-                    int v1id = Faces[i].y() - 1 + _offset;
-                    int v2id = Faces[i].z() - 1 + _offset;
-                    Vector3f v0N = Vector3f::Zero();
-                    Vector3f v1N = Vector3f::Zero();
-                    Vector3f v2N = Vector3f::Zero();
-                    for(int j = 0; j < Faces.size(); j++)
-                    {
-                        int v0id2 = Faces[j].x() - 1 + _offset;
-                        int v1id2 = Faces[j].y() - 1 + _offset;
-                        int v2id2 = Faces[j].z() - 1 + _offset;
-                        if(v0id == v0id2 || v0id == v1id2 || v0id == v2id2)
-                            v0N = v0N + _faces[j]->Normal;
-                        if(v1id == v0id2 || v1id == v1id2 || v1id == v2id2)
-                            v1N = v1N + _faces[j]->Normal;
-                        if(v2id == v0id2 || v2id == v1id2 || v2id == v2id2)
-                            v2N = v2N + _faces[j]->Normal;
-                    }
-                    _faces[i]->V0N = v0N.normalized();
-                    _faces[i]->V1N = v1N.normalized();
-                    _faces[i]->V2N = v2N.normalized();
-                    _faces[i]->smooth = true;
-                }
-            }            
         }
+        if(_smooth)
+        {
+            for(int i = 0; i < Faces.size(); i++)
+            {
+                int v0id = Faces[i].x() - 1 + _offset;
+                int v1id = Faces[i].y() - 1 + _offset;
+                int v2id = Faces[i].z() - 1 + _offset;
+                Vector3f v0N = Vector3f::Zero();
+                Vector3f v1N = Vector3f::Zero();
+                Vector3f v2N = Vector3f::Zero();
+                for(int j = 0; j < Faces.size(); j++)
+                {
+                    int v0id2 = Faces[j].x() - 1 + _offset;
+                    int v1id2 = Faces[j].y() - 1 + _offset;
+                    int v2id2 = Faces[j].z() - 1 + _offset;
+                    if(v0id == v0id2 || v0id == v1id2 || v0id == v2id2)
+                        v0N = v0N + _faces[j]->Normal;
+                    if(v1id == v0id2 || v1id == v1id2 || v1id == v2id2)
+                        v1N = v1N + _faces[j]->Normal;
+                    if(v2id == v0id2 || v2id == v1id2 || v2id == v2id2)
+                        v2N = v2N + _faces[j]->Normal;
+                }
+                _faces[i]->V0N = v0N.normalized();
+                _faces[i]->V1N = v1N.normalized();
+                _faces[i]->V2N = v2N.normalized();
+                _faces[i]->smooth = true;
+            }
+        }            
+
         bvh = new BVH((IHittable**)_faces, _fCount);
         aabb = AABB(bvh->aabb);
         auto ltw = LocalToWorld;
@@ -392,6 +397,11 @@ namespace raytracer
 
             Vector3f T = Vector3f(p.z() * 2 * M_PI, 0, p.x() * (-2) * M_PI);             
             Vector3f B = Vector3f(p.y() * std::cos(us) * M_PI, -Radius * std::sin(ut) * M_PI, p.y() * std::sin(us) * M_PI);
+            if(NormalMap != nullptr){
+                T.normalize();
+                B.normalize();
+            }
+
             hit.TBN(0, 0) = T.x(); hit.TBN(0, 1) = B.x(); hit.TBN(0, 2) = hit.Normal.x();
             hit.TBN(1, 0) = T.y(); hit.TBN(1, 1) = B.y(); hit.TBN(1, 2) = hit.Normal.y();
             hit.TBN(2, 0) = T.z(); hit.TBN(2, 1) = B.z(); hit.TBN(2, 2) = hit.Normal.z();
@@ -476,12 +486,13 @@ namespace raytracer
         if (v < 0 || u + v > 1)
             return false;
         float t = V0V2.dot(qvec) * invDet;
-        if(t < 1e-2)
+        if(t < 0)
         {
             return false;
         }
         hit.T = t;
-        hit.Point = ray.Origin + ray.Direction * t;
+        hit.Point = (*V0) + u * ((*V1) - (*V0)) + v * ((*V2) - (*V0));
+        //hit.Point = ray.Origin + ray.Direction * t;
         auto n = Normal;
         if(smooth)
         {

@@ -31,6 +31,11 @@ namespace raytracer
             float ApertureSize;
             bool FocusEnabled = false;
             friend std::ostream& operator<<(std::ostream& os, const Camera& cam);
+            bool Tonemap = false;
+            float KV;
+            float BurnPercent;
+            float Saturation;
+            float Gamma;            
         private:
             std::default_random_engine generator;
             std::uniform_real_distribution<float> rnd;

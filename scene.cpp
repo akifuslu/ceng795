@@ -8,6 +8,7 @@
 #include <thread>
 #include <chrono>
 #include <future>
+#include "tonemapper.h"
 
 namespace raytracer
 {
@@ -27,8 +28,21 @@ namespace raytracer
         {
             Cameras.push_back(Camera(camera));
         }
+        auto images = node.child("Textures").child("Images");
+        for(auto& image: images.children())
+        {
+            ImageLocator::GetInstance().AddImage(new Image(image));
+        }
         auto lights = node.child("Lights");
-        ambientLight = AmbientLight(lights.child("AmbientLight"));
+        if(lights.child("AmbientLight"))
+        {
+            ambientLight = AmbientLight(lights.child("AmbientLight"));
+        }
+        else
+        {
+            ambientLight = AmbientLight();
+        }
+        
         for(auto& light: lights.children("PointLight"))
         {
             Lights.push_back(new PointLight(light));
@@ -36,6 +50,20 @@ namespace raytracer
         for(auto& light: lights.children("AreaLight"))
         {
             Lights.push_back(new AreaLight(light));
+        }
+        for(auto& light: lights.children("DirectionalLight"))
+        {
+            Lights.push_back(new DirectionalLight(light));
+        }
+        for(auto& light: lights.children("SpotLight"))
+        {
+            Lights.push_back(new SpotLight(light));
+        }
+        environmentLight = nullptr;
+        for(auto& light: lights.children("SphericalDirectionalLight"))
+        {
+            environmentLight = new EnvironmentLight(light);
+            Lights.push_back(environmentLight);
         }
 
         auto materials = node.child("Materials");
@@ -98,11 +126,6 @@ namespace raytracer
             {
                 Composite.push_back(CompositeFrom(transform));
             }
-        }
-        auto images = node.child("Textures").child("Images");
-        for(auto& image: images.children())
-        {
-            ImageLocator::GetInstance().AddImage(new Image(image));
         }
         auto textures = node.child("Textures");
         for(auto& texture: textures.children("TextureMap"))
@@ -252,17 +275,32 @@ namespace raytracer
                 return hit.Texture->Color(data);
             }
 
+            if(hit.Material.Degamma)
+            {
+                hit.Material.AmbientReflectance.x() = std::pow(hit.Material.AmbientReflectance.x(), cam.Gamma);   
+                hit.Material.AmbientReflectance.y() = std::pow(hit.Material.AmbientReflectance.y(), cam.Gamma);   
+                hit.Material.AmbientReflectance.z() = std::pow(hit.Material.AmbientReflectance.z(), cam.Gamma);   
+
+                hit.Material.DiffuseReflectance.x() = std::pow(hit.Material.DiffuseReflectance.x(), cam.Gamma);   
+                hit.Material.DiffuseReflectance.y() = std::pow(hit.Material.DiffuseReflectance.y(), cam.Gamma);   
+                hit.Material.DiffuseReflectance.z() = std::pow(hit.Material.DiffuseReflectance.z(), cam.Gamma);   
+
+                hit.Material.SpecularReflectance.x() = std::pow(hit.Material.SpecularReflectance.x(), cam.Gamma);   
+                hit.Material.SpecularReflectance.y() = std::pow(hit.Material.SpecularReflectance.y(), cam.Gamma);   
+                hit.Material.SpecularReflectance.z() = std::pow(hit.Material.SpecularReflectance.z(), cam.Gamma);   
+
+            }
             color = color + hit.Material.AmbientReflectance.cwiseProduct(ambientLight.Intensity);
 
             for(int l = 0; l < Lights.size(); l++)
             {
-                auto light = Lights[l];                            
-                Vector3f lsample = light->SamplePoint();
-                // SHADOW CHECK                
-                Vector3f wi = (lsample - hit.Point).normalized();
+                auto light = Lights[l];                    
                 Vector3f sp = hit.Point + hit.Normal * ShadowRayEpsilon;
-                float r = (lsample - hit.Point).norm();
-                Ray sRay = Ray(sp, wi, ray.Time);                
+                Vector3f lsample;
+                Vector3f ldir;
+                float r = light->SamplePoint(sp, hit.Normal, lsample, ldir);
+                // SHADOW CHECK                
+                Ray sRay = Ray(sp, ldir, ray.Time);                
                 RayHit sHit;
                 bool sf = RayCast(sRay, sHit, r, false);
                 if(sf && sHit.T < r)
@@ -272,7 +310,7 @@ namespace raytracer
                 if(hit.Texture != nullptr)
                 {
                     if(hit.Texture->Mode == DecalMode::REPLACE_KD)
-                    {
+                    {                        
                         kd = hit.Texture->Color(data);
                     }
                     else if(hit.Texture->Mode == DecalMode::BLEND_KD)
@@ -281,16 +319,16 @@ namespace raytracer
                     }
                 }
                 // DIFFUSE
-                float teta = wi.dot(hit.Normal);
+                float teta = ldir.dot(hit.Normal);
                 teta = teta < 0 ? 0 : teta;
-                color += kd.cwiseProduct(light->GetLuminance(hit.Point, lsample)) * teta;                            
+                color += kd.cwiseProduct(light->GetLuminance(hit.Point, hit.Normal, lsample)) * teta;                            
                 // SPECULAR
                 Vector3f wo = (cam.Position - hit.Point).normalized();
-                Vector3f h = (wi + wo).normalized();
+                Vector3f h = (ldir + wo).normalized();
                 teta = h.dot(hit.Normal);
                 teta = teta < 0 ? 0 : teta;
                 teta = std::pow(teta, hit.Material.PhongExponent);
-                color += hit.Material.SpecularReflectance.cwiseProduct(light->GetLuminance(hit.Point, lsample)) * teta;
+                color += hit.Material.SpecularReflectance.cwiseProduct(light->GetLuminance(hit.Point, hit.Normal, lsample)) * teta;
             }
         }
         else
@@ -301,6 +339,10 @@ namespace raytracer
                 data.u = (float)xy.x() / cam.ImageResolution.x();
                 data.v = (float)xy.y() / cam.ImageResolution.y();
                 color = BackTexture->Sample(data) * 255;
+            }
+            else if(environmentLight != nullptr)
+            {
+                color = environmentLight->GetColor(ray.Direction);
             }
             else
             {
@@ -315,7 +357,15 @@ namespace raytracer
         for(auto& cam: Cameras)
         {
             std::vector<unsigned char> pixels;
-            pixels.resize(cam.ImageResolution.x() * cam.ImageResolution.y() * 4);
+            std::vector<Vector3f> fpixels;
+            if(cam.Tonemap)
+            {
+                fpixels.resize(cam.ImageResolution.x() * cam.ImageResolution.y());
+            }
+            else
+            {
+                pixels.resize(cam.ImageResolution.x() * cam.ImageResolution.y() * 4);
+            }
             int size = cam.ImageResolution.x() * cam.ImageResolution.y();
             int cores = std::thread::hardware_concurrency();
             volatile std::atomic<int> count(0);
@@ -323,7 +373,7 @@ namespace raytracer
             while(cores--)
             {
                 futures.emplace_back(
-                    std::async([=, &count, &cam, &pixels]()
+                    std::async([=, &count, &cam, &pixels, &fpixels]()
                     {
                         while(true)
                         {
@@ -340,19 +390,40 @@ namespace raytracer
                                 cl += Trace(rays[r], cam, MaxRecursionDepth, xy);
                             }
                             cl /= rays.size();
-                            pixels[4 * index] = cl.x() > 255 ? 255 : cl.x();
-                            pixels[4 * index + 1] = cl.y() > 255 ? 255 : cl.y();
-                            pixels[4 * index + 2] = cl.z() > 255 ? 255 : cl.z();
-                            pixels[4 * index + 3] = 255;
+                            if(cam.Tonemap)
+                            {
+                                fpixels[index] = cl;
+                            }
+                            else
+                            {                            
+                                pixels[4 * index] = cl.x() > 255 ? 255 : cl.x();
+                                pixels[4 * index + 1] = cl.y() > 255 ? 255 : cl.y();
+                                pixels[4 * index + 2] = cl.z() > 255 ? 255 : cl.z();
+                                pixels[4 * index + 3] = 255;
+                            }
                         }
                     }
                     )
                 );
             }
             futures.clear();
-            std::vector<unsigned char> png;
-            lodepng::encode(png, pixels, cam.ImageResolution.x(), cam.ImageResolution.y());
-            lodepng::save_file(png, cam.ImageName);
+            if(!cam.Tonemap)
+            {
+                std::vector<unsigned char> png;
+                lodepng::encode(png, pixels, cam.ImageResolution.x(), cam.ImageResolution.y());
+                lodepng::save_file(png, cam.ImageName);
+            }
+            else
+            {
+                WriteEXR(fpixels, cam.ImageResolution.x(), cam.ImageResolution.y(), cam.ImageName.c_str());
+                // tonemap
+                std::vector<unsigned char> px;
+                px.resize(fpixels.size() * 4);
+                PhotographicToneMapper::Map(fpixels, cam, px);
+                std::vector<unsigned char> png;
+                lodepng::encode(png, px, cam.ImageResolution.x(), cam.ImageResolution.y());
+                lodepng::save_file(png, cam.ImageName.append(".png"));
+            }            
         }            
     }
 

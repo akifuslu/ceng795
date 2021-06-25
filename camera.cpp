@@ -22,6 +22,15 @@ namespace raytracer
             ApertureSize = node.child("ApertureSize").text().as_float();
             FocusEnabled = true;
         }
+        if(node.child("Tonemap"))
+        {
+            Tonemap = true;
+            auto opt = Vec2fFrom(node.child("Tonemap").child("TMOOptions"));
+            KV = opt.x();
+            BurnPercent = opt.y();
+            Saturation = node.child("Tonemap").child("Saturation").text().as_float();
+            Gamma = node.child("Tonemap").child("Gamma").text().as_float();
+        }
         row = std::sqrt(NumSamples);
         col = NumSamples / row;
         if(std::strcmp(node.attribute("type").as_string(), "lookAt") == 0)
@@ -41,6 +50,8 @@ namespace raytracer
         w = Gaze * -1;
         u = Up.cross(w).normalized();
         v = w.cross(u).normalized();
+        if(std::strcmp(node.attribute("handedness").as_string(), "left") == 0)
+            u *= -1;
         img_center = Position - w * NearDistance;
         lu = img_center + v * NearPlane.w() + u * NearPlane.x();
         suv = ((NearPlane.y() - NearPlane.x()) / (float)ImageResolution.x());

@@ -8,6 +8,7 @@ namespace raytracer
 
     Material::Material(pugi::xml_node node)
     {
+        Degamma = node.attribute("degamma").as_bool(false);        
         AmbientReflectance = Vec3fFrom(node.child("AmbientReflectance"));
         DiffuseReflectance = Vec3fFrom(node.child("DiffuseReflectance"));
         SpecularReflectance = Vec3fFrom(node.child("SpecularReflectance"));                

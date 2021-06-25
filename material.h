@@ -21,6 +21,7 @@ namespace raytracer
             float AbsorptionIndex;
             Vector3f AbsorptionCoefficient;
             float Roughness;
+            bool Degamma;
             int Type;
             friend std::ostream& operator<<(std::ostream& os, const Material& mat);
     };

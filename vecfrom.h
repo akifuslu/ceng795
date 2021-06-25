@@ -10,6 +10,14 @@ using namespace Eigen;
 
 namespace raytracer
 {
+    static Vector2f Vec2fFrom(pugi::xml_node node)
+    {
+        float x, y;
+        std::stringstream stream(node.first_child().value());
+        stream >> x >> y;
+        return Vector2f(x, y);
+    }
+
     static Vector3f Vec3fFrom(pugi::xml_node node)
     {
         float x, y, z;

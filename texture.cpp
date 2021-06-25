@@ -1,5 +1,7 @@
 #include "texture.h"
 #include<iostream>
+#define TINYEXR_IMPLEMENTATION
+#include "tinyexr.h"
 
 namespace raytracer{
 
@@ -12,7 +14,8 @@ namespace raytracer{
         {
             stride = 4;
             Mode = ImageMode::RGBA;
-            lodepng::decode(Pixels, Width, Height, name);
+            auto code = lodepng::decode(Pixels, Width, Height, name);
+            std::cout << lodepng_error_text(code) << std::endl;
         }
         else if(extension.compare("jpg") == 0)
         {
@@ -37,6 +40,23 @@ namespace raytracer{
             Pixels.resize(Height * Width * stride);
             read_jpeg(name.c_str(), Pixels, Width, Height);     
         }
+        else if(extension.compare("exr") == 0)
+        {
+            stride = 4;
+            Mode = ImageMode::HDR;
+            float* out; // width * height * RGBA
+            const char* err = nullptr;
+            int w, h;
+            LoadEXR(&out, &w, &h, name.c_str(), &err);
+            Width = w;
+            Height = h;
+            _hdr = new Hdr();
+            _hdr->Pixels = out;
+        }
+        else
+        {
+            std::cout << "UNSUPPORTED IMAGE FORMAT!" << std::endl;
+        }
     }
 
     Vector3f Image::Fetch(int x, int y)
@@ -52,6 +72,12 @@ namespace raytracer{
             p.x() = Pixels[o];
             p.y() = Pixels[o + 1];
             p.z() = Pixels[o + 2];
+        }
+        else if(Mode == HDR)
+        {
+            p.x() = _hdr->Pixels[o];
+            p.y() = _hdr->Pixels[o + 1];
+            p.z() = _hdr->Pixels[o + 2];
         }
         else
         {
@@ -254,11 +280,62 @@ namespace raytracer{
 
     Vector3f CheckerBoardSampler::Sample(SamplerData& data)
     {
-        int x = std::floor(data.u * Scale + Offset);
-        int y = std::floor(data.v * Scale + Offset);
-        if((x + y) % 2 == 0)
-            return WhiteColor;
-        return BlackColor;
+        auto p = data.point * Scale + Vector3f(Offset, Offset, Offset);
+        if(((int)std::floor(p.x()) + (int)std::floor(p.y()) + (int)std::floor(p.z())) % 2 == 0)
+            return BlackColor;
+        return WhiteColor;
+    }
+
+    VoronoiSampler::VoronoiSampler(pugi::xml_node node)
+    {
+        Size = node.child("Size").text().as_float(1);
+    }
+
+    Vector3f VoronoiSampler::Sample(SamplerData& data)
+    {
+        auto p = data.point * Size;
+        float cx = std::floor(p.x());   
+        float cy = std::floor(p.y());
+        float cz = std::floor(p.z());
+        float min = 10;
+        for(int i = -1; i <= 1; i++)
+        {
+            for(int j = -1; j <= 1; j++)
+            {
+                for(int k = -1; k <= 1; k++)
+                {
+                    Vector3f cell = Vector3f(cx + i, cy + j, cz + k);
+                    Vector3f cellPosition = cell + random3to3(cell);
+                    Vector3f toCell = cellPosition - p;
+                    float distToCell = toCell.norm();
+                    if(distToCell < min){
+                        min = distToCell;
+                    }                    
+                }
+            }
+        }
+        return Vector3f(min, min, min);
+    }
+
+    Vector3f VoronoiSampler::SampleBump(SamplerData& data, Vector3f& t, Vector3f& b, Vector3f& np, float f)
+    {
+        auto n = data.normal;
+        float eps = 0.001f;
+        float c = Sample(data).x();
+        data.point.x() += eps;
+        float dx = (Sample(data).x() - c) / eps;
+        data.point.x() -= eps;
+        data.point.y() += eps;
+        float dy = (Sample(data).y() - c) / eps;
+        data.point.y() -= eps;
+        data.point.z() += eps;
+        float dz = (Sample(data).z() - c) / eps;
+        data.point.z() -= eps;
+    
+        auto grad = Vector3f(dx, dy, dz);
+        auto gp = grad.dot(n) * n;
+        auto go = grad - gp;
+        return n - f * go; 
     }
 
     Texture::Texture(pugi::xml_node node)
@@ -271,6 +348,10 @@ namespace raytracer{
         else if(_type.compare("checkerboard") == 0)
         {
             Sampler = new CheckerBoardSampler(node);
+        }
+        else if(_type.compare("voronoi") == 0)
+        {
+            Sampler = new VoronoiSampler(node);
         }
         else if(_type.compare("image") == 0)
         {
@@ -337,4 +418,67 @@ namespace raytracer{
             n *= -1;
         return Sampler->SampleBump(data, t, b, n, Factor);
     }
+
+
+    void WriteEXR(std::vector<Vector3f> pixels, const int width, const int height,
+                   const char *filename)
+    {
+        EXRHeader header;
+        EXRImage image;
+
+        InitEXRHeader(&header);
+        InitEXRImage(&image);
+
+        image.num_channels = 3;
+
+        std::vector<float> images[3];
+        images[0].resize(pixels.size());
+        images[1].resize(pixels.size());
+        images[2].resize(pixels.size());
+
+        for(int i = 0; i < width * height; i++)
+        {
+            images[0][i] = pixels[i].x();
+            images[1][i] = pixels[i].y();
+            images[2][i] = pixels[i].z();
+        }
+
+        float* image_ptr[3];
+        image_ptr[0] = &(images[2].at(0)); // B
+        image_ptr[1] = &(images[1].at(0)); // G
+        image_ptr[2] = &(images[0].at(0)); // R
+
+        image.images = (unsigned char**)image_ptr;
+        image.width = width;
+        image.height = height;
+
+        header.num_channels = 3;
+        header.channels = (EXRChannelInfo *)malloc(sizeof(EXRChannelInfo) * header.num_channels); 
+        // Must be BGR(A) order, since most of EXR viewers expect this channel order.
+        strncpy(header.channels[0].name, "B", 255); header.channels[0].name[strlen("B")] = '\0';
+        strncpy(header.channels[1].name, "G", 255); header.channels[1].name[strlen("G")] = '\0';
+        strncpy(header.channels[2].name, "R", 255); header.channels[2].name[strlen("R")] = '\0';
+
+        header.pixel_types = (int *)malloc(sizeof(int) * header.num_channels); 
+        header.requested_pixel_types = (int *)malloc(sizeof(int) * header.num_channels);
+        for(int i = 0; i < header.num_channels; i++)
+        {
+            // pixel type of input image
+                header.pixel_types[i] = TINYEXR_PIXELTYPE_FLOAT;
+            // pixel type of output image to be stored in .EXR
+                header.requested_pixel_types[i] = TINYEXR_PIXELTYPE_HALF; 
+        }
+
+        const char* err;
+        int ret = SaveEXRImageToFile(&image, &header, filename, &err);
+        if(ret != TINYEXR_SUCCESS)
+        {
+            fprintf(stderr, "Save EXR err: %s\n", err);
+        }
+        //printf("Saved exr file. [ %s ] \n", fname.c_str());
+
+        free(header.channels);
+        free(header.pixel_types);
+        free(header.requested_pixel_types);
+        }
 }

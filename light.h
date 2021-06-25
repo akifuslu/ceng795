@@ -3,6 +3,8 @@
 #include "Eigen/Dense"
 #include "pugixml.hpp"
 #include "vecfrom.h"
+#include "texture.h"
+#include "imagelocator.h"
 
 using namespace Eigen;
 
@@ -11,7 +13,7 @@ namespace raytracer
     class AmbientLight
     {
         public:
-            AmbientLight() {};
+            AmbientLight() {Intensity = Vector3f::Zero();};
             AmbientLight(pugi::xml_node node);
             Vector3f Intensity;
     };
@@ -20,12 +22,11 @@ namespace raytracer
     {
         public:
             Light(pugi::xml_node node);
-            Vector3f Position;            
-            virtual Vector3f SamplePoint()
+            virtual float SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir)
             {
-                return Vector3f::Zero();
+                return 0;
             }
-            virtual Vector3f GetLuminance(Vector3f point, Vector3f lsample)
+            virtual Vector3f GetLuminance(Vector3f point, Vector3f normal, Vector3f lsample)
             {
                 return Vector3f::Zero();
             }
@@ -35,22 +36,60 @@ namespace raytracer
     {
         public:
             PointLight(pugi::xml_node node);
+            Vector3f Position;          
             Vector3f Intensity;
-            virtual Vector3f SamplePoint() override;
-            virtual Vector3f GetLuminance(Vector3f point, Vector3f lsample) override;
+            virtual float SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir) override;
+            virtual Vector3f GetLuminance(Vector3f point, Vector3f normal, Vector3f lsample) override;
     };
 
     class AreaLight : public Light
     {
         public:
             AreaLight(pugi::xml_node node);
+            Vector3f Position;          
             Vector3f Normal;
             Vector3f Radiance;
             float Size;
-            virtual Vector3f SamplePoint() override;
-            virtual Vector3f GetLuminance(Vector3f point, Vector3f lsample) override;
+            virtual float SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir) override;
+            virtual Vector3f GetLuminance(Vector3f point, Vector3f normal, Vector3f lsample) override;
         private:
             Vector3f u, v;
+            std::default_random_engine generator;
+            std::uniform_real_distribution<float> rnd;
+    };
+
+    class DirectionalLight : public Light
+    {
+        public:
+            DirectionalLight(pugi::xml_node node);
+            Vector3f Direction;
+            Vector3f Radiance;
+            virtual float SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir) override;
+            virtual Vector3f GetLuminance(Vector3f point, Vector3f normal, Vector3f lsample) override;
+    };
+
+    class SpotLight : public Light
+    {
+        public:
+            SpotLight(pugi::xml_node node);
+            Vector3f Position;
+            Vector3f Direction;
+            Vector3f Intensity;
+            float CoverageAngle;
+            float FalloffAngle;
+            virtual float SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir) override;
+            virtual Vector3f GetLuminance(Vector3f point, Vector3f normal, Vector3f lsample) override;
+    };
+
+    class EnvironmentLight : public Light
+    {
+        public:
+            EnvironmentLight(pugi::xml_node node);
+            virtual float SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir) override;
+            virtual Vector3f GetLuminance(Vector3f point, Vector3f normal, Vector3f lsample) override;
+            Vector3f GetColor(Vector3f direction);
+        private:
+            Image* _hdr;
             std::default_random_engine generator;
             std::uniform_real_distribution<float> rnd;
     };
