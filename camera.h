@@ -6,7 +6,7 @@
 #include "vecfrom.h"
 #include <vector>
 #include <random>
-
+#include "tonemapper.h"
 
 using namespace Eigen;
 
@@ -32,10 +32,8 @@ namespace raytracer
             bool FocusEnabled = false;
             friend std::ostream& operator<<(std::ostream& os, const Camera& cam);
             bool Tonemap = false;
-            float KV;
-            float BurnPercent;
-            float Saturation;
-            float Gamma;            
+            float Gamma;
+            ToneMapper* toneMapper;
         private:
             std::default_random_engine generator;
             std::uniform_real_distribution<float> rnd;

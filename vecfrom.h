@@ -118,4 +118,9 @@ namespace raytracer
         return reflect;
     }
 
+    static Vector3f Vec3Pow(Vector3f in, float n)
+    {
+        return Vector3f(std::pow(in.x(), n), std::pow(in.y(), n), std::pow(in.z(), n));
+    }
+
 }

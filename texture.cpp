@@ -101,7 +101,7 @@ namespace raytracer{
         }
         Normalizer = node.child("Normalizer").text().as_float(255);
         int id = node.child("ImageId").text().as_int();
-        Image = ImageLocator::GetInstance().GetImage(id);
+        Image = ResourceLocator::GetInstance().GetImage(id);
     }
 
     Vector3f ImageSampler::Sample(SamplerData& data)

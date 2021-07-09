@@ -25,10 +25,19 @@ namespace raytracer
         if(node.child("Tonemap"))
         {
             Tonemap = true;
-            auto opt = Vec2fFrom(node.child("Tonemap").child("TMOOptions"));
-            KV = opt.x();
-            BurnPercent = opt.y();
-            Saturation = node.child("Tonemap").child("Saturation").text().as_float();
+            auto ttype = std::string(node.child("Tonemap").child("TMO").text().as_string());
+            if(ttype.compare("Photographic") == 0)
+            {
+                toneMapper = new PhotographicToneMapper(node.child("Tonemap"));
+            }
+            else if(ttype.compare("Filmic") == 0)
+            {
+                toneMapper = new FilmicTonemapper(node.child("Tonemap"));
+            }
+            else if(ttype.compare("ACES") == 0)
+            {
+                toneMapper = new ACESToneMapper(node.child("Tonemap"));
+            }
             Gamma = node.child("Tonemap").child("Gamma").text().as_float();
         }
         row = std::sqrt(NumSamples);

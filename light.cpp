@@ -35,6 +35,21 @@ namespace raytracer
         np.normalize();
         u = np.cross(Normal).normalized();
         v = Normal.cross(u).normalized();
+
+
+        int k = 0;
+        rndX.resize(100);
+        rndY.resize(100);
+        for(int i = 0; i < 10; i++)
+        {
+            for(int j = 0; j < 10; j++)
+            {
+                rndX[k] = rnd(generator) + i;
+                rndY[k] = rnd(generator) + j;
+                k++;
+            }
+        }
+        c = 0;
     }
 
     DirectionalLight::DirectionalLight(pugi::xml_node node) : Light(node)
@@ -55,7 +70,7 @@ namespace raytracer
     EnvironmentLight::EnvironmentLight(pugi::xml_node node) : Light(node)
     {
         int imgId = node.child("ImageId").text().as_int();
-        _hdr = ImageLocator::GetInstance().GetImage(imgId);
+        _hdr = ResourceLocator::GetInstance().GetImage(imgId);
     }
 
     float PointLight::SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir)
@@ -69,8 +84,11 @@ namespace raytracer
 
     float AreaLight::SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir)
     {
-        float r1 = rnd(generator) - .5f;
-        float r2 = rnd(generator) - .5f;
+        float r1 = rndX[c % 100] / 10 - .5f;
+        float r2 = rndY[c % 100] / 10 - .5f;
+        c++;
+        //float r1 = rnd(generator) - .5f;
+        //float r2 = rnd(generator) - .5f;
         sample = Position + Size * (u * (r1) + v * (r2));
         dir = sample - point;
         float r = dir.norm();

@@ -9,7 +9,7 @@
 #include "Eigen/Dense"
 #include <vector>
 #include <unordered_map>
-#include "imagelocator.h"
+#include "resourcelocator.h"
 
 using namespace Eigen;
 
@@ -21,6 +21,7 @@ namespace raytracer
             Scene(pugi::xml_node node);
             void Load();
             void Render(int numThreads);
+            bool RayCast(Ray& ray, RayHit& hit, float maxDist, bool closest);
             Vector3f BackgroundColor;
             float ShadowRayEpsilon;
             float IntersectionTestEpsilon;
@@ -43,7 +44,6 @@ namespace raytracer
 
             friend std::ostream& operator<<(std::ostream& os, const Scene& scene);
         private:
-            bool RayCast(Ray& ray, RayHit& hit, float maxDist, bool closest);
             Vector3f Trace(Ray& ray, Camera& cam, int depth, Vector2i& xy);
     };
 }

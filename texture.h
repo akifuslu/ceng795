@@ -4,7 +4,7 @@
 #include "pugixml.hpp"
 #include <string>
 #include <vector>
-#include "imagelocator.h"
+#include "resourcelocator.h"
 #include "Eigen/Dense"
 #include <random>
 #include <algorithm>

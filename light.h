@@ -4,7 +4,7 @@
 #include "pugixml.hpp"
 #include "vecfrom.h"
 #include "texture.h"
-#include "imagelocator.h"
+#include "resourcelocator.h"
 
 using namespace Eigen;
 
@@ -56,6 +56,9 @@ namespace raytracer
             Vector3f u, v;
             std::default_random_engine generator;
             std::uniform_real_distribution<float> rnd;
+            std::vector<float> rndX;
+            std::vector<float> rndY;
+            int c;
     };
 
     class DirectionalLight : public Light
