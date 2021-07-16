@@ -22,7 +22,7 @@ namespace raytracer
     {
         public:
             Light(pugi::xml_node node);
-            virtual float SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir)
+            virtual float SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir, Vector3f& lnormal)
             {
                 return 0;
             }
@@ -38,7 +38,7 @@ namespace raytracer
             PointLight(pugi::xml_node node);
             Vector3f Position;          
             Vector3f Intensity;
-            virtual float SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir) override;
+            virtual float SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir, Vector3f& lnormal) override;
             virtual Vector3f GetLuminance(Vector3f point, Vector3f normal, Vector3f lsample) override;
     };
 
@@ -50,7 +50,7 @@ namespace raytracer
             Vector3f Normal;
             Vector3f Radiance;
             float Size;
-            virtual float SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir) override;
+            virtual float SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir, Vector3f& lnormal) override;
             virtual Vector3f GetLuminance(Vector3f point, Vector3f normal, Vector3f lsample) override;
         private:
             Vector3f u, v;
@@ -67,7 +67,7 @@ namespace raytracer
             DirectionalLight(pugi::xml_node node);
             Vector3f Direction;
             Vector3f Radiance;
-            virtual float SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir) override;
+            virtual float SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir, Vector3f& lnormal) override;
             virtual Vector3f GetLuminance(Vector3f point, Vector3f normal, Vector3f lsample) override;
     };
 
@@ -80,7 +80,7 @@ namespace raytracer
             Vector3f Intensity;
             float CoverageAngle;
             float FalloffAngle;
-            virtual float SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir) override;
+            virtual float SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir, Vector3f& lnormal) override;
             virtual Vector3f GetLuminance(Vector3f point, Vector3f normal, Vector3f lsample) override;
     };
 
@@ -88,7 +88,7 @@ namespace raytracer
     {
         public:
             EnvironmentLight(pugi::xml_node node);
-            virtual float SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir) override;
+            virtual float SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir, Vector3f& lnormal) override;
             virtual Vector3f GetLuminance(Vector3f point, Vector3f normal, Vector3f lsample) override;
             Vector3f GetColor(Vector3f direction);
         private:

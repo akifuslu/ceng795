@@ -7,7 +7,27 @@ namespace raytracer
         Radiance = Vec3fFrom(node.child("Radiance"));
     }
 
-    float LightSphere::SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir)
+    LightMesh::LightMesh(pugi::xml_node node) : Light(node), Mesh(node)
+    {
+        Radiance = Vec3fFrom(node.child("Radiance"));
+    }
+
+    void LightMesh::Load(Scene& scene)
+    {
+        Mesh::Load(scene);
+        totalArea = 0;
+        std::vector<float> probs;
+        for(int i = 0; i < _fCount; i++)
+        {
+            float a = _faces[i]->GetArea(LocalToWorld);
+            probs.push_back(a);
+            totalArea += a;
+        }
+        rnd = std::discrete_distribution<int>(probs.begin(), probs.end());
+    }
+
+
+    float LightSphere::SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir, Vector3f& lnormal)
     {
         auto plocal = WorldToLocal * point;
         float r = Radius;
@@ -44,6 +64,19 @@ namespace raytracer
         return (sp - point).norm();
     }
 
+    float LightMesh::SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir, Vector3f& lnormal)
+    {
+        int tri = rnd(generator);
+        float r1 = urnd(generator);
+        float r2 = urnd(generator);
+        Vector3f lp = _faces[tri]->SamplePoint(r1, r2);
+        lnormal = (LocalToWorld.linear() * _faces[tri]->Normal).normalized();
+        sample = LocalToWorld * lp;
+        dir = (sample - point).normalized();
+        return (sample - point).norm();
+    }
+
+
     Vector3f LightSphere::GetLuminance(Vector3f point, Vector3f normal, Vector3f lsample)
     {
         auto plocal = WorldToLocal * point;
@@ -56,11 +89,26 @@ namespace raytracer
         return Radiance * (2 * M_PI * (1 - costhetamax));
     }   
 
+    Vector3f LightMesh::GetLuminance(Vector3f point, Vector3f normal, Vector3f lsample)
+    {
+        float r = (point - lsample).squaredNorm();
+        float theta = (point - lsample).normalized().dot(normal);
+        if(theta <= 0)
+            theta *= -1;            
+        return Radiance * totalArea * theta / r;
+    }
+
     bool LightSphere::Hit(const Ray& ray, RayHit& hit)
     {
         if(ray.Ignore == Id)
             return false;
         return Sphere::Hit(ray, hit);
     }
- 
+
+    bool LightMesh::Hit(const Ray& ray, RayHit& hit)
+    {
+        if(ray.Ignore == Id)
+            return false;
+        return Mesh::Hit(ray, hit);
+    }    
 }

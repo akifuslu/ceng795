@@ -92,6 +92,8 @@ namespace raytracer
             Vector3f V1N;
             Vector3f V2N;
             virtual bool Hit(const Ray& ray, RayHit& hit) override;
+            float GetArea(Transform<float, 3, Affine> ltw);
+            Vector3f SamplePoint(float r1, float r2);
 //        private:
             Material* _material;
             Matrix<float, 3, 3> TBN;
@@ -128,7 +130,7 @@ namespace raytracer
             virtual bool Hit(const Ray& ray, RayHit& hit) override;
             virtual void Load(Scene& scene) override;
             BVH* bvh;
-        private:
+        protected:
             Face** _faces;
             int _fCount;
             bool _ply = false;

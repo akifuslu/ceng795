@@ -101,7 +101,8 @@ namespace raytracer
             Vector3f sp = hit.Point + hit.Normal * scene.ShadowRayEpsilon;
             Vector3f lsample;
             Vector3f ldir;
-            float r = light->SamplePoint(sp, hit.Normal, lsample, ldir);
+            Vector3f lnormal;
+            float r = light->SamplePoint(sp, hit.Normal, lsample, ldir, lnormal);
             // SHADOW CHECK                
             Ray sRay = Ray(sp, ldir, ray.Time);                
             auto obj = dynamic_cast<Object*>(light);
@@ -115,7 +116,7 @@ namespace raytracer
                 continue;
 
             auto viewDir = (ray.Origin - hit.Point).normalized();
-            auto lum = light->GetLuminance(hit.Point, hit.Normal, lsample);
+            auto lum = light->GetLuminance(hit.Point, lnormal, lsample);
             color += Brdf->Shade(kd, ks, ldir, hit.Normal, viewDir, lum);
         }
         return color;

@@ -73,7 +73,7 @@ namespace raytracer
         _hdr = ResourceLocator::GetInstance().GetImage(imgId);
     }
 
-    float PointLight::SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir)
+    float PointLight::SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir, Vector3f& lnormal)
     {
         sample = Position;
         dir = sample - point;
@@ -82,7 +82,7 @@ namespace raytracer
         return r;
     }
 
-    float AreaLight::SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir)
+    float AreaLight::SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir, Vector3f& lnormal)
     {
         float r1 = rndX[c % 100] / 10 - .5f;
         float r2 = rndY[c % 100] / 10 - .5f;
@@ -96,21 +96,21 @@ namespace raytracer
         return r;
     }
 
-    float DirectionalLight::SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir)
+    float DirectionalLight::SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir, Vector3f& lnormal)
     {
         sample = Vector3f::Zero();
         dir = -Direction;
         return FLT_MAX;
     }
 
-    float SpotLight::SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir)
+    float SpotLight::SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir, Vector3f& lnormal)
     {
         sample = Position;
         dir = -Direction;
         return (point - sample).norm();
     }
 
-    float EnvironmentLight::SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir)
+    float EnvironmentLight::SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir, Vector3f& lnormal)
     {
         // random reject sampling
         while(true)
@@ -171,24 +171,6 @@ namespace raytracer
     Vector3f EnvironmentLight::GetLuminance(Vector3f point, Vector3f normal, Vector3f lsample)
     {
         return GetColor(lsample) * 2 * M_PI;
-        //float x = std::fabs(normal.x());
-        //float y = std::fabs(normal.y());
-        //float z = std::fabs(normal.z());
-        //Vector3f np;
-        //if(x <= y && x <= z) np = Vector3f(1, normal.y(), normal.z());
-        //else if(y <= x && y <= z) np = Vector3f(normal.x(), 1, normal.z());
-        //else np = Vector3f(normal.x(), normal.y(), 1);
-        //np.normalize();
-        //auto u = np.cross(normal).normalized();
-        //auto w = normal.cross(u).normalized();
-        //float theta = std::acos(lsample.dot(normal));
-        //float sigma = std::atan(lsample.dot(w) / lsample.dot(u));
-        //float uvu = (-sigma + M_PI) / (2 * M_PI);
-        //float uvv = theta / M_PI;
-        //int px = uvu * (_hdr->Width - 1);
-        //int py = uvv * (_hdr->Height - 1);
-        //auto l = _hdr->Fetch(px, py);
-        //return l * 2 * M_PI;
     }
 
     Vector3f EnvironmentLight::GetColor(Vector3f direction)

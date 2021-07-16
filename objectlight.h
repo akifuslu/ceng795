@@ -8,7 +8,7 @@ namespace raytracer
     {
         public:
             LightSphere(pugi::xml_node node);
-            virtual float SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir) override;
+            virtual float SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir, Vector3f& lnormal) override;
             virtual Vector3f GetLuminance(Vector3f point, Vector3f normal, Vector3f lsample) override;
             virtual bool Hit(const Ray& ray, RayHit& hit) override;
             Vector3f Radiance;
@@ -16,6 +16,22 @@ namespace raytracer
             std::default_random_engine generator;
             std::uniform_real_distribution<float> rnd;
 
+    };
+
+    class LightMesh : public Mesh, public Light
+    {
+        public:
+            LightMesh(pugi::xml_node node);
+            virtual void Load(Scene& scene) override;
+            virtual float SamplePoint(Vector3f point, Vector3f normal, Vector3f& sample, Vector3f& dir, Vector3f& lnormal) override;
+            virtual Vector3f GetLuminance(Vector3f point, Vector3f normal, Vector3f lsample) override;
+            virtual bool Hit(const Ray& ray, RayHit& hit) override;
+            Vector3f Radiance;
+        private:
+            float totalArea;
+            std::default_random_engine generator;
+            std::discrete_distribution<int> rnd;
+            std::uniform_real_distribution<float> urnd;
     };
 }
 

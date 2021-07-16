@@ -137,7 +137,12 @@ namespace raytracer
                 Objects.push_back(ls);
                 Lights.push_back(ls);
             }
-
+            else if(std::strcmp("LightMesh", object.name()) == 0)
+            {
+                auto ls = new LightMesh(object);
+                Objects.push_back(ls);
+                Lights.push_back(ls);
+            }
         }
         auto transformations = node.child("Transformations");
         for(auto& transform: transformations.children())
@@ -298,10 +303,15 @@ namespace raytracer
             if(ray.N != 1)
                 return color;
 
-            auto obj = dynamic_cast<LightSphere*>(hit.Object);
-            if(obj != nullptr)
+            auto ls = dynamic_cast<LightSphere*>(hit.Object);
+            auto lm = dynamic_cast<LightMesh*>(hit.Object);
+            if(ls != nullptr)
             {
-                color += obj->Radiance;
+                color += ls->Radiance;
+            }
+            else if(lm != nullptr)
+            {
+                color += lm->Radiance;
             }
             else
             {

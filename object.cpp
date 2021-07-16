@@ -515,6 +515,21 @@ namespace raytracer
         return true;
     }
 
+    float Face::GetArea(Transform<float, 3, Affine> ltw)
+    {
+        Vector3f wv0 = ltw * (*V0);
+        Vector3f wv1 = ltw * (*V1);
+        Vector3f wv2 = ltw * (*V2);
+        return (wv1 - wv0).cross(wv2 - wv0).norm() / 2;
+    }
+
+    Vector3f Face::SamplePoint(float r1, float r2)
+    {
+        Vector3f p = (1 - r1) * (*V1) + r1 * (*V2);
+        r2 = std::sqrt(r2);
+        return r2 * p + (1 - r2) * (*V0);
+    }
+
     int Split(IHittable** hs, int count, float p, int axis)
     {
         int mid = 0;
