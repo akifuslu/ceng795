@@ -169,7 +169,7 @@ namespace raytracer
             virtual std::ostream& Print(std::ostream& os) const override;
             virtual bool Hit(const Ray& ray, RayHit& hit) override;
             virtual void Load(Scene& scene) override;
-        private:
+        protected:
             Vector3f _center;            
     };
 

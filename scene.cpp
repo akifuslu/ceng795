@@ -131,6 +131,13 @@ namespace raytracer
             {
                 Objects.push_back(new MeshInstance(object));
             }
+            else if(std::strcmp("LightSphere", object.name()) == 0)
+            {
+                auto ls = new LightSphere(object);
+                Objects.push_back(ls);
+                Lights.push_back(ls);
+            }
+
         }
         auto transformations = node.child("Transformations");
         for(auto& transform: transformations.children())
@@ -291,7 +298,15 @@ namespace raytracer
             if(ray.N != 1)
                 return color;
 
-            color += hit.Material.Shade(*this, ray, hit, cam.Gamma);
+            auto obj = dynamic_cast<LightSphere*>(hit.Object);
+            if(obj != nullptr)
+            {
+                color += obj->Radiance;
+            }
+            else
+            {
+                color += hit.Material.Shade(*this, ray, hit, cam.Gamma);
+            }            
         }
         else
         {

@@ -19,5 +19,6 @@ namespace raytracer
             float N = 1;
             float Dist;
             float Time;
+            int Ignore;
     };
 }

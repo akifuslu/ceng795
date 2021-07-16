@@ -1,2 +1,2 @@
 all:
-	clang++ *.cpp -o raytracer -std=c++17 -Ofast -flto -ljpeg
+	clang++ *.cpp -o input/hw7/directLighting/raytracer -std=c++17 -O3 -flto -ljpeg

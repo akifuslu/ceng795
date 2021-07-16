@@ -104,6 +104,11 @@ namespace raytracer
             float r = light->SamplePoint(sp, hit.Normal, lsample, ldir);
             // SHADOW CHECK                
             Ray sRay = Ray(sp, ldir, ray.Time);                
+            auto obj = dynamic_cast<Object*>(light);
+            if(obj != nullptr)
+                sRay.Ignore = obj->Id;
+            else
+                sRay.Ignore = -1;
             RayHit sHit;
             bool sf = scene.RayCast(sRay, sHit, r, false);
             if(sf && sHit.T < r)
@@ -162,7 +167,7 @@ namespace raytracer
     {
         Vector3f color = Vector3f::Zero();
         // DIFFUSE
-        float teta = lightDir.dot(normal);
+        float teta = lightDir.dot(normal);        
         teta = teta < 0 ? 0 : teta;
         if(Normalized)
             color += kd.cwiseProduct(luminance) * teta / M_PI;

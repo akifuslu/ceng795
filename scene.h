@@ -10,6 +10,7 @@
 #include <vector>
 #include <unordered_map>
 #include "resourcelocator.h"
+#include "objectlight.h"
 
 using namespace Eigen;
 

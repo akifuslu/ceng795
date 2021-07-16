@@ -24,17 +24,33 @@ namespace raytracer{
                 auto options = Vec2fFrom(node.child("TMOOptions"));
                 _kv = options.x();
                 _burn = options.y();
-                _gamma = node.child("Gamma").text().as_float();
+                auto g = node.child("Gamma").text().as_string();
                 _sat = node.child("Saturation").text().as_float();
+                if(std::strcmp(g, "sRGB") == 0)
+                    _srgb = true;
+                else
+                 _gamma = node.child("Gamma").text().as_float();
+
             }
         private:
             float _kv;
             float _burn;
             float _gamma;
             float _sat;
+            bool _srgb;
             float luminance(Vector3f& rgb)
             {
                 return 0.212671 * rgb.x() + 0.71516 * rgb.y() + 0.072169 * rgb.z();
+            }
+            float linear_to_srgb(float linear) 
+            {
+                float srgb;
+                if (linear <= 0.0031308f) {
+                    srgb = linear * 12.92f;
+                } else {
+                    srgb = 1.055f * std::powf(linear, 1.0f / 2.4f) - 0.055f;
+                }
+                return srgb * 255.f;
             }
         public:
             virtual void Map(std::vector<Vector3f>& pixels, std::vector<unsigned char>& data) override
@@ -46,15 +62,13 @@ namespace raytracer{
                 {
                     if(pixels[i].x() < 0 || pixels[i].y() < 0 || pixels[i].z() < 0)
                         pixels[i] = Vector3f::Zero();
-                    if(isnan(pixels[i].x()) || isnan(pixels[i].y()) || isnan(pixels[i].z()))
-                        pixels[i] = Vector3f::Zero();
-
                     lws[i] = luminance(pixels[i]);
                 }
                 float avglw = 0;
                 for(int i = 0; i < lws.size(); i++)
                 {
-                    avglw += std::log(lws[i] + 1e-6);
+                    if(lws[i] > 0)
+                        avglw += std::log(lws[i] + 1e-6);
                 }
                 avglw = std::exp(avglw / ls.size());
                 for(int i = 0; i < ls.size(); i++)
@@ -79,9 +93,21 @@ namespace raytracer{
                     temp.y() = std::clamp(powf(temp.y() / lws[i], _sat) * ls[i], 0.0f, 1.0f);
                     temp.z() = std::clamp(powf(temp.z() / lws[i], _sat) * ls[i], 0.0f, 1.0f);
 
-                    unsigned char rd = (int)floor(pow(temp.x(),  g) * 255.0f);
-                    unsigned char gd = (int)floor(pow(temp.y(),  g) * 255.0f);
-                    unsigned char bd = (int)floor(pow(temp.z(),  g) * 255.0f);
+                    unsigned char rd;
+                    unsigned char gd;
+                    unsigned char bd; 
+                    if(!_srgb)
+                    {
+                        rd = (int)floor(pow(temp.x(),  g) * 255.0f);
+                        gd = (int)floor(pow(temp.y(),  g) * 255.0f);
+                        bd = (int)floor(pow(temp.z(),  g) * 255.0f);
+                    }
+                    else
+                    {
+                        rd = (int)linear_to_srgb(temp.x());
+                        gd = (int)linear_to_srgb(temp.y());
+                        bd = (int)linear_to_srgb(temp.z());
+                    }
 
                     data[i*4]     = rd;
                     data[i*4 + 1] = gd;
